@@ -180,7 +180,7 @@ figure.fig figcaption { font-size: .85rem; color: var(--fg-muted); margin-top: 8
 
 <div class="topbar">
   <span class="brand">GenUT 설계 문서</span>
-  <span class="meta">v0.6 초안 · 2026-10-22 · 검토 중</span>
+  <span class="meta">v0.7 초안 · 2026-10-22 · 검토 중</span>
   <span class="spacer"></span>
   <button class="btn" id="btnAll" type="button">모두 접기</button>
   <button class="btn" id="btnTheme" type="button">테마 전환</button>
@@ -722,7 +722,7 @@ memcpy         external          pr_err         external
   <li>소스의 반환 지점 목록(6장)으로 보아 기대값이 명백히 소스 의도와 일치하는데 실제값이 다를 때</li>
   <li>같은 케이스를 두 번 고쳤는데도 실제값이 소스 의도와 계속 다를 때</li>
 </ul>
-<p>이때 Fixer는 <code>drop_case</code>를 선택하고 <code>suspected_bug: true</code>와 사유를 적습니다. 리포트의 "소스 버그 의심" 목록에 올라가며, 사람이 확인할 가치가 있는 발견입니다. 기대값을 실제값으로 바꿔서 억지로 통과시키는 것은 Reviewer가 거부합니다.</p>
+<p>이때 Fixer는 <code>drop_case</code>를 선택하고 <code>suspected_bug: true</code>와 사유를 적습니다. 리포트의 "소스 버그 의심" 목록에 올라가며, 사람이 확인할 가치가 있는 발견입니다. 이 목록은 프로덕트 지식(suspected_bugs.md)에 함수 본문 해시와 함께 저장되어, 같은 함수를 다시 생성할 때 같은 케이스를 또 시도하지 않도록 참고합니다(11.5). 기대값을 실제값으로 바꿔서 억지로 통과시키는 것은 Reviewer가 거부합니다.</p>
 
 <h3>7.4 좁게 고치기</h3>
 <h4>케이스 단위 단조 진행</h4>
@@ -1257,13 +1257,14 @@ max_context = 32768</code></pre>
   <li>규칙: 공통 규칙 뒤에 프로덕트 규칙을 덧붙임. 프롬프트에는 "공통 규칙"과 "이 프로덕트 규칙"으로 구분해 넣음</li>
   <li>지식: 프롬프트에 global.md와 product.md를 각각 토큰 예산 안에서 넣음. <b>다른 프로덕트의 지식은 절대 로드하지 않음</b></li>
   <li>스텁 md: 프로덕트 stub-tools/가 있으면 그것, 없으면 공통</li>
+  <li>소스 버그 의심 목록: 같은 함수를 다시 생성할 때 "이전에 소스 문제로 제외된 케이스"를 Test Writer·Fixer에 알려 같은 시도를 반복하지 않게 함. 대상 함수 본문 해시가 기록 당시와 다르면 무효로 보고 다시 시도</li>
 </ul>
 <h4>쓸 때: 범위를 정하는 규칙</h4>
 <p>쌓이는 정보는 누가 쓰느냐에 따라 범위가 정해집니다.</p>
 <div class="tbl"><table>
 <tr><th>정보</th><th>누가 쓰나</th><th>범위</th><th>이유</th></tr>
 <tr><td>링크 범위 캐시, 사전검증 캐시</td><td>코드</td><td>프로덕트</td><td>경로·심볼이 프로덕트 고유</td></tr>
-<tr><td>소스 버그 의심 목록</td><td>코드</td><td>프로덕트</td><td>그 소스의 사실</td></tr>
+<tr><td>소스 버그 의심 목록</td><td>코드</td><td>프로덕트</td><td>그 소스의 사실. 함수 본문 해시와 함께 저장해 다음 생성에서 참고</td></tr>
 <tr><td>커널 플래그 정제 학습 목록</td><td>코드</td><td>공통</td><td>툴체인 특성이지 프로덕트 특성이 아님</td></tr>
 <tr><td>실패 패턴 → 수정 사례</td><td>코드 + Note Keeper</td><td>둘 다</td><td>패턴은 공통, 수정 내용에 프로덕트 심볼이 있으면 프로덕트</td></tr>
 <tr><td>자유 서술 지식 노트</td><td>Note Keeper 에이전트</td><td>둘 다</td><td>아래 검증 규칙으로 결정</td></tr>
@@ -1279,6 +1280,22 @@ max_context = 32768</code></pre>
     </ul>
   </li>
 </ol>
+<h4>다음 생성에 들어가는 것과 기록으로만 남는 것</h4>
+<p>두 저장소의 내용이 모두 생성 프롬프트에 들어가는 것은 아닙니다. 생성 품질에 영향을 주는 "학습된 정보"는 지식 노트, 실패 패턴 수정 사례, 플래그 학습 목록, 소스 버그 의심 목록 네 가지이며, 범위 검증 규칙은 이 중 에이전트가 쓰는 앞의 두 가지에 적용됩니다.</p>
+<div class="tbl"><table>
+<tr><th>정보</th><th>범위</th><th>다음 생성에서의 쓰임</th></tr>
+<tr><td>설정 (config.toml, product.toml)</td><td>공통 / 프로덕트</td><td>예산, 후보 수, 경로, provider 선택</td></tr>
+<tr><td>규칙 md</td><td>공통 + 프로덕트</td><td>모든 에이전트의 시스템 프롬프트</td></tr>
+<tr><td>역할 프롬프트</td><td>공통</td><td>에이전트별 지시문</td></tr>
+<tr><td>스텁 도구 md</td><td>공통, 프로덕트가 있으면 우선</td><td>Stub Planner와 Test Writer 프롬프트</td></tr>
+<tr><td>지식 노트 (global.md, product.md)</td><td>공통 / 프로덕트</td><td>Test Writer와 Fixer 프롬프트에 토큰 예산 안에서 삽입</td></tr>
+<tr><td>실패 패턴 → 수정 사례 (fix_patterns.yaml)</td><td>공통</td><td>분류된 실패에 맞는 과거 성공 수정을 Fixer 프롬프트에 예시로 제공</td></tr>
+<tr><td>플래그 정제 학습 목록</td><td>공통</td><td>커널 compile_commands 정제 시 제거 목록에 합침</td></tr>
+<tr><td>소스 버그 의심 목록 (suspected_bugs.md)</td><td>프로덕트</td><td>같은 함수를 다시 생성할 때 "이전에 소스 문제로 제외된 케이스"를 Test Writer·Fixer에 알려 같은 시도를 반복하지 않게 함. 대상 함수 본문 해시가 바뀌었으면 무효</td></tr>
+<tr><td>링크 범위 캐시, 사전검증 캐시</td><td>프로덕트</td><td>분석과 사전검증을 건너뛰거나 빠르게 처리</td></tr>
+<tr><td>실행 기록 (runs/)</td><td>프로덕트</td><td><b>생성에 들어가지 않음.</b> 뷰어, replay, diff, Note Keeper의 입력</td></tr>
+<tr><td>평가 기준치, 평가 코퍼스</td><td>공통 / 프로덕트</td><td><b>생성에 들어가지 않음.</b> 성공률 측정</td></tr>
+</table></div>
 <h4>관리 명령</h4>
 <div class="tbl"><table>
 <tr><th>명령</th><th>하는 일</th></tr>
