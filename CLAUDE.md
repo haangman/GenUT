@@ -49,7 +49,7 @@ uv pip install --python .venv -e ".[dev]"
 
 ## 진행 상황
 
-설계 13.1의 14단계 중 1~4단계(스켈레톤, LLM 계층, 분석기, 검증 기반)가 구현되었고 다음은 5단계(규칙·에이전트)다. `agents`, `backends/gtest`, `viewer`는 아직 빈 패키지이고 `backends/kunit`에는 `kbuild.py`만 있다. CLI에는 `version`·`init`·`doctor`·`show`·`product`만 있고 `knowledge`는 하위 명령이 비어 있다. `gen`·`view`·`finalize`·`replay`·`eval` 등은 설계 11.1의 명세만 있다.
+설계 13.1의 14단계 중 1~5단계(스켈레톤, LLM 계층, 분석기, 검증 기반, 규칙·에이전트)가 구현되었고 다음은 6단계(gtest 백엔드)다. `agents/`에는 Agent base, Analyzer, Test Writer(스모크·확장 모드)가 있다. Test Writer의 커버리지 모드와 Analyzer의 도달 불가 분류는 8단계, 후보 여러 개를 케이스 단위로 합치기는 7단계 몫이다. `backends/gtest`, `viewer`는 아직 빈 패키지이고 `backends/kunit`에는 `kbuild.py`만 있다. CLI에는 `version`·`init`·`doctor`·`show`·`product`만 있고 `knowledge`는 하위 명령이 비어 있다. `gen`·`view`·`finalize`·`replay`·`eval` 등은 설계 11.1의 명세만 있다.
 
 ## 아키텍처
 
@@ -63,6 +63,7 @@ uv pip install --python .venv -e ".[dev]"
 - **LLM 계층** (`llm/`): 에이전트 → `structured.ask_structured`(제약 디코딩 / JSON 추출·복구 재요청 / 펜스 코드 블록, `length`면 출력 한도 두 배로 1회 재요청) → `ChatProvider` 프로토콜(`anthropic`, `openai_compat`, `fake`). 설계 기준 모델은 운영용 사내 Gemma 4(32k 컨텍스트 중형 모델)이므로 지시는 짧게, 선택은 열거형으로, 수정은 부분 패치가 아닌 케이스 전체 재작성으로 받는다. 모든 프롬프트는 `prompt_builder.PromptBuilder`로 조립한다. 조각(`Fragment`)마다 REQUIRED/SHRINKABLE/OPTIONAL 우선순위가 있고, 넘치면 낮은 것부터 빼거나 줄이며, 필수 조각만으로 넘치면 `ContextOverflow`를 낸다. Anthropic provider는 temperature 같은 샘플링 인자를 보내지 않는다(API가 받지 않음).
 - **정적 분석** (`analysis/`): `compile_db`(상대 경로 절대화, DB에 없는 새 테스트 파일은 이웃 항목 플래그 차용, 커널 `.o.cmd` 폴백, pip libclang에 없는 컴파일러 내장 헤더 탐색) → `flag_sanitizer`(gcc 전용 플래그 제거, 모르는 플래그는 다시 파싱하며 학습) → `parser`/`extractor`(libclang → `FunctionInfo`) → `linkscope`(호출 심볼마다 링크 시 정의 유무 판정 = 스텁 필요 여부. gtest와 커널 built-in/모듈/`EXPORT_SYMBOL`을 구분) → `summarizer`(분석 보고서를 프롬프트 조각으로).
 - **검증** (`verify/`): 원시 로그는 LLM에 주지 않는다. `diagnostics`가 gcc/clang/ld/modpost 출력을 구조화·중복 제거하고 케이스(공유 영역이면 `@shared`)에 귀속시킨다. `classify`가 실패 종류와 권장 전략을 정하며, 전략 사다리 `fix_case → add_stub → drop_case → narrow_scope → give_up`에서 Fixer는 권장 전략과 그 오른쪽(더 포기하는 쪽)만 고를 수 있다(`allowed_strategies`). `staged`는 빌드 전 libclang 의미 검사, `logs/`는 KTAP·gtest 결과 파싱, 크래시 브리프, 토큰 상한 안의 우선순위 축약을 맡는다.
+- **에이전트** (`agents/`): 모든 호출은 `Agent.call()`을 거친다. 함수당 토큰 예산 확인 → `PromptBuilder`로 한도 맞추기 → `ask_structured` → 실행 기록(`prompts/NN-<label>.md`, `llm_call` 이벤트에 잘린 조각과 프롬프트 해시) → 예산에 토큰 더하기 순이다. 예산 초과나 필수 조각만으로 넘치는 경우에는 LLM을 부르지 않는다. 실패는 모두 `AgentError(kind=...)`로 나온다. 에이전트는 프롬프트 문자열이 아니라 `Fragment` 목록을 만들고, 조립기는 목록 뒤쪽의 SHRINKABLE부터 줄이므로 목록 순서가 곧 축약 순서다. 역할 지시문은 `agents/prompts/<en|ko>/<role>.md`이고 파일 형식은 설계 11.4에 있다. Test Writer 응답은 `merge_cases`가 정리한다(통과 케이스와 같은 이름은 버림, 이름을 C 식별자로, 새 헬퍼는 공유 영역 판을 올려 추가).
 - 여러 계층이 함께 쓰는 모델(`Diagnostic`, `CrashBrief`, `FailureInfo`, `CaseResult`)은 순환 import를 피하려고 `models.py`에 둔다.
 
 ## 코드 규칙
@@ -75,6 +76,6 @@ uv pip install --python .venv -e ".[dev]"
 
 ## 테스트 작성
 
-- 테스트에서 실제 LLM API를 부르지 않는다. 에이전트·구조화 출력은 `FakeProvider`로 검증한다(`responder` 콜백, 태그별 `script`, 둘 다 없으면 스키마를 만족하는 최소 응답). 실제 provider는 가짜 client(Anthropic)나 `httpx.MockTransport`(OpenAI 호환)로 요청 형태만 확인한다.
+- 테스트에서 실제 LLM API를 부르지 않는다. 에이전트·구조화 출력은 `FakeProvider`로 검증한다(`responder` 콜백, 태그별 `script`, 둘 다 없으면 스키마를 만족하는 최소 응답). 실제 provider는 가짜 client(Anthropic)나 `httpx.MockTransport`(OpenAI 호환)로 요청 형태만 확인한다. 에이전트 테스트는 `FakeProvider(script={"analyzer": [...], "test_writer": [...]})`처럼 역할 이름(태그)별로 응답을 주고, 실제로 보낸 프롬프트는 `provider.calls`로 확인한다.
 - `home` 픽스처는 `GENUT_HOME`을 tmp 경로로 바꾼다. 사용자의 `~/.genut`을 건드리지 않게 이 픽스처나 `--home`을 쓴다.
 - 분석 테스트는 `tests/fixtures/sample_project`(링 버퍼·문자열 유틸 C 프로젝트)와 `sample_db` 픽스처 또는 `write_compile_db()`가 만드는 compile_commands.json을 쓴다. conftest가 `tests/`를 `sys.path`에 넣으므로 헬퍼는 `from conftest import SAMPLE, write_compile_db`처럼 가져온다.

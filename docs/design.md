@@ -1083,6 +1083,8 @@ flowchart LR
 | `src/genut/analysis/flag_sanitizer.yaml` + `$GENUT_HOME/knowledge/flag_sanitizer.learned.yaml` | 패키지 + 공통 | 커널 플래그 제거 목록 |
 | `config.toml` / `product.toml` | 공통 / 프로덕트 | 예산, 후보 수, 경로 |
 
+**역할 프롬프트 파일 형식**: 첫 `## ` 제목 앞은 역할 지시문(시스템 프롬프트)이고, `## smoke`, `## expand`, `## example.gtest`처럼 이름 붙은 절은 단계별 할 일과 예시입니다. 패키지 기본값은 `src/genut/agents/prompts/<prompt_language>/<role>.md`이며, `$GENUT_HOME/prompts/<role>.md`가 있으면 그 파일의 역할 지시문과 절이 기본값을 덮어씁니다. 사용자 파일에 없는 절은 기본값을 씁니다. 본문에는 `$function`, `$framework`, `$language`, `$wrapper`, `$existing` 자리표시자를 쓸 수 있고, 바로 뒤에 영문자·숫자·`_`가 오면 `${function}_`처럼 중괄호로 감쌉니다. `<!-- -->` 주석은 프롬프트에 들어가지 않습니다. 실행 기록에는 쓰인 프롬프트 파일과 그 해시가 호출마다 남습니다.
+
 ### 11.5 여러 프로덕트 운영: 공통 정보와 프로덕트 정보의 분리
 
 GenUT는 한 번 셋업하면 여러 프로덕트의 코드에 대해 테스트를 생성합니다. 생성하면서 쌓이는 정보는 **프로덕트와 무관하게 쓰이는 것**과 **그 프로덕트에서만 쓰여야 하는 것**이 섞이면 안 됩니다. 섞이면 A 프로덕트의 헤더 경로나 심볼 이름이 B 프로덕트 프롬프트에 들어가 오히려 성공률을 떨어뜨립니다.
