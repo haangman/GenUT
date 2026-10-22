@@ -2,7 +2,7 @@
 
 > 이 문서는 GenUT(Generate Unit Tests)의 설계를 설명합니다. C 코드나 테스트 도구를 잘 모르는 사람도 흐름을 이해할 수 있도록 썼고, 구현자가 그대로 따라 만들 수 있을 만큼 구체적으로 적었습니다. 코드 구현은 이 문서를 함께 검토하고 합의한 뒤에 시작합니다.
 
-**문서 버전**: 0.10 (초안, 2026-10-22)
+**문서 버전**: 0.11 (초안, 2026-10-22)
 **그림**: HTML 판(`docs/design.html`)에는 시스템 구성도, 흐름도, 에이전트 협업도, 검증 깔때기, 케이스 상태 머신, 로그 축약 파이프라인, 커버리지 루프, 공통/프로덕트 저장소, 에이전트 호출 시점·역할 카드, 프롬프트 조립기 그림 10장이 들어 있습니다.
 **상태**: 검토 중
 
@@ -157,7 +157,7 @@ flowchart TD
 
 - **무엇**: 대상 함수의 시그니처, 파라미터 타입(구조체면 필드까지), 호출하는 함수 목록, 읽고 쓰는 전역 변수, 필요한 include, static 여부, `#ifdef` 조건을 뽑는다. 그리고 호출하는 함수 각각에 대해 "테스트를 링크할 때 정의가 있는가"를 판정한다(6장).
 - **누가**: 거의 전부 코드(libclang). 마지막에 Analyzer 에이전트가 보고서를 읽고 "테스트 가능한가, 주의할 점은 무엇인가"를 짧게 덧붙인다.
-- **실패하면**: compile_commands.json에서 플래그를 못 찾거나 파싱이 깨지면 여기서 멈추고 원인을 안내한다. Analyzer가 "테스트 불가"(예: 인라인 어셈블리만 있는 함수)로 판정하면 사유를 남기고 종료한다.
+- **실패하면**: compile_commands.json에서 플래그를 못 찾거나 파싱이 깨지면 여기서 멈추고 원인을 안내한다. Analyzer가 "테스트 불가"로 판정해도, 코드가 확인한 결정적 신호(본문이 인라인 어셈블리뿐, 컴파일 DB 항목 없음, 분기와 반환 지점이 전혀 없는 빈 함수)가 있을 때만 종료한다. 신호가 없으면 경고로만 기록하고 진행한다. LLM 오판 하나로 실행이 끝나지 않게 하기 위해서다.
 
 #### ② 스텁
 
@@ -200,8 +200,8 @@ flowchart TD
 #### ⑧ 리뷰
 
 - **무엇**: 통과한 테스트가 규칙을 지키는지, "항상 참인 단정"처럼 의미 없는 테스트가 아닌지, 수정 과정에서 단정을 무력화해 억지로 통과시킨 것이 아닌지, 커버리지용 케이스가 단정 없이 줄만 밟는 것은 아닌지 검사한다.
-- **누가**: Reviewer 에이전트.
-- **실패하면**: 지적된 케이스를 1회 수정하거나 제거한다.
+- **누가**: 먼저 코드의 결정적 검사(7.9, 케이스가 통과하는 즉시 실행), 마지막에 Reviewer 에이전트.
+- **실패하면**: 지적된 케이스를 1회 수정하거나 제거한다. 수정은 빌드가 한 번 더 들므로 빌드 예산 안에서만 하고, 제거로 커버리지가 떨어지면 리포트에 재계산해 적는다.
 
 ### 3.3 왜 이렇게 나눴나
 
@@ -209,6 +209,7 @@ flowchart TD
 - **작게 시작해서 키운다**: ④→⑤ 순서 덕분에 "빌드 자체가 안 되는 문제"와 "특정 케이스의 논리 문제"를 분리해서 다룬다.
 - **케이스는 독립적이다**: ⑤⑥⑦에서 케이스 하나가 실패해도 다른 케이스는 영향을 받지 않는다. 최종 결과는 "통과한 케이스의 집합"이다.
 - **커버리지는 마지막에 채운다**: 먼저 규칙의 최소 케이스로 빌드·통과를 확보하고, 그 위에서 미커버 줄만 겨냥한 케이스를 추가한다. 처음부터 100%를 요구하면 실패 원인이 섞인다.
+- **빌드는 파일 단위로 묶는다**: 한 소스 파일의 여러 함수를 한 테스트 파일에 넣고, 라운드마다 한 번만 빌드한다(7.8). 느린 커널 빌드에서 시간을 결정하는 요소다.
 
 ---
 
@@ -246,7 +247,7 @@ HTML 판의 그림 3-1이 같은 내용을 호출 시점 표와 역할 카드로
 |---|---|---|---|
 | **Analyzer** | 코드가 만든 분석 보고서 | 테스트 가능 여부, 주의 사항(예: "두 번째 인자는 반드시 정렬된 배열"), 추천 케이스 목록 | 보고서에 없는 사실을 지어내지 않는다. 불확실하면 "확인 필요"로 표시 |
 | **Stub Planner** | 호출 심볼 목록 + 링크 범위 판정 + 스텁 도구 md | 스텁할 심볼 목록과 각 스텁의 기본 동작(반환값 등) | "정의 없음" 심볼은 반드시 포함. 규칙 md의 "반드시 스텁" 목록 준수 |
-| **Test Writer** | 분석 보고서 + 스텁 사용법 + 규칙 md + (확장 단계에서) 현재 통과 케이스 | 테스트 케이스 목록(이름, 목적, 소스) | 규칙 md 준수. 통과 케이스는 글자 하나 바꾸지 않는다. 케이스는 서로 독립 |
+| **Test Writer** | 분석 보고서 + Analyzer의 주의 사항·추천 케이스 + 스텁 사용법 + 규칙 md + (확장 이후) 현재 통과 케이스의 이름·시그니처와 제거된 케이스·사유 | 테스트 케이스 목록(이름, 목적, 소스) | 규칙 md 준수. 통과 케이스는 글자 하나 바꾸지 않는다. 케이스는 서로 독립 |
 | **Fixer** | 실패 케이스 소스 + 분류 결과 + 축약 진단/크래시 브리프 + 권장 전략 | 전략(열거형) + 이유 + 새 케이스 소스 | 열거된 전략만 선택. 단정을 지워서 통과시키지 않는다. 소스 버그가 의심되면 `drop_case`와 함께 사유를 적는다 |
 | **Reviewer** | 최종 테스트 파일 + 규칙 md + 수정 이력 | 지적 목록(케이스, 규칙 위반/무의미 단정/단정 무력화, 설명) | 지적은 구체적 근거와 함께. 통과를 위해 단정이 약화된 흔적을 찾는다 |
 | **Note Keeper** | 실행 기록 요약(판정, 실패 분류, 수정 결과) | 다음 실행에 도움이 될 노트 + 범위(global/product) + 근거 | 프로덕트 경로·심볼이 있으면 프로덕트 범위. 한 문장씩, 근거 실행 ID 포함 (11.5) |
@@ -269,7 +270,7 @@ HTML 판의 그림 3-1이 같은 내용을 호출 시점 표와 역할 카드로
 - 역할 설명은 짧게, 예시는 하나만. 긴 시스템 프롬프트는 중형 모델에서 지시 누락을 만든다.
 - 선택은 열거형으로. "어떻게 고칠지 자유롭게 말해 봐" 대신 "다음 다섯 가지 중 하나를 골라".
 - 출력은 전체 케이스 소스. 부분 패치(search/replace)는 정확한 문자열 일치가 필요해 중형 모델이 자주 실패한다. 케이스 하나는 수십 줄이라 전체를 다시 쓰는 비용이 작다.
-- 후보 다중 생성. 사내 API는 호출 비용이 낮으므로 온도를 약간 올려 N개를 만들고 전부 검증한다.
+- 후보 다중 생성. 사내 API는 호출 비용이 낮으므로 온도를 약간 올려 N개를 만들고 전부 검증한다. 후보는 파일 단위로 고르지 않고 **케이스 단위로 합친다**. 후보들의 케이스에 고유 이름을 붙여 한 파일로 묶어 한 번에 검증하고, 통과한 케이스의 합집합을 취한다. 같은 목적의 케이스가 여럿 통과하면 하나만 남긴다.
 
 ---
 
@@ -368,7 +369,7 @@ LLM이 "추측"할 여지를 최대한 없애는 것이 목표입니다. 테스�
 | 열거형/매크로 상수 | `RB_OK = 0, RB_FULL = -1` | 기대값 작성 |
 | 반환값 의미 | 소스 안의 `return -ENOSPC;` 등 반환 지점 목록 | 오류 경로 케이스 설계 |
 | 호출 심볼 | `rb_alloc_slot`, `memcpy`, `pr_err` | 스텁 판단 |
-| 전역 참조 | `static struct rb_stats stats;` 읽기/쓰기 | 상태 격리 주의 |
+| 전역 참조 | `static struct rb_stats stats;` 읽기/쓰기 | 쓰기가 있으면 뼈대에 케이스별 리셋 훅(gtest `SetUp`, KUnit `init`)을 넣는다. static 전역의 리셋은 스텁 도구의 접근 방식으로 |
 | include 줄 | 선언이 있는 헤더 경로를 역추적해 `#include "rb.h"` 로 확정 | include 누락 방지 |
 | static 여부 | `static int rb_alloc_slot(...)` | 대상 함수나 호출 심볼이 static이면 스텁 도구의 static 접근 기능 사용 대상으로 표시 |
 | 전처리 조건 | `#ifdef CONFIG_RB_DEBUG` 안에 있음 | 빌드 설정 경고 |
@@ -382,12 +383,26 @@ LLM이 "추측"할 여지를 최대한 없애는 것이 목표입니다. 테스�
 | 판정 | 뜻 | 조치 |
 |---|---|---|
 | `same_tu` | 대상 소스 파일 안에 정의가 있음 | 그대로 사용 |
-| `linkable` | 같은 빌드 타깃(CMake 라이브러리, 커널 오브젝트)에 정의가 있음 | 그대로 사용하되 부작용(하드웨어 등)이 있으면 규칙에 따라 스텁 |
+| `linkable` | 테스트가 링크하는 타깃(gtest: `link_targets`, KUnit: 아래 기준)에 정의가 있음 | 그대로 사용하되 부작용(하드웨어 등)이 있으면 규칙에 따라 스텁 |
 | `external` | libc, 커널 코어 API 등 항상 링크되는 것 | 그대로 사용 |
 | `undefined` | 어디에도 정의가 없거나 테스트 빌드에 포함되지 않음 | **스텁 필수** |
 | `must_stub` | 규칙 md의 "반드시 스텁" 패턴에 해당 | **스텁 필수** |
 
 판정 근거(어느 파일에서 정의를 찾았는지)도 기록해 뷰어에서 볼 수 있게 합니다.
+
+**gtest의 판정 기준**: 테스트 실행 파일이 링크하는 사용자 타깃(`[gtest] link_targets`, 7.5)에 속한 소스에 정의가 있으면 `linkable`입니다. 타깃과 소스의 대응은 CMake File API(`<build>/.cmake/api/v1`)의 codemodel에서 읽습니다.
+
+**KUnit의 판정 기준**: 커널에서는 "링크 가능"이 테스트의 빌드 형태에 따라 달라집니다.
+
+| 상황 | 판정 |
+|---|---|
+| 테스트가 built-in(`obj-y`)이고 심볼이 vmlinux에 들어가는 파일에 있음 | `linkable` |
+| 테스트가 모듈(`obj-m`)이고 심볼이 `EXPORT_SYMBOL`/`EXPORT_SYMBOL_GPL`로 내보내짐 | `linkable` |
+| 테스트가 모듈이고 심볼이 내보내지지 않음 | `undefined` → 스텁 필수 |
+| 심볼이 정의된 파일이 현재 `.config`에서 빌드되지 않음(`obj-$(CONFIG_X)`가 꺼짐) | `undefined` |
+| 심볼이 `static` | 스텁 도구의 static 접근 방식(10장) |
+
+테스트의 빌드 형태는 `test_file`이 등록된 Makefile 줄(`obj-y`/`obj-m`/`obj-$(CONFIG_...)`)과 `.config`에서 읽습니다.
 
 ### 6.5 분석 보고서 (LLM에 들어가는 형태)
 
@@ -427,7 +442,7 @@ memcpy         external          pr_err         external
 
 - **Preflight** (3장 ③): 뼈대만으로 빌드. 환경 문제를 LLM 루프 밖으로 뺀다.
 - **사실 확정** (6장): include, 시그니처, 타입, 상수, 스텁 필수 심볼을 코드가 계산해 프롬프트에 넣는다.
-- **뼈대 제공**: 백엔드별 최소 뼈대(include 블록, 스위트 선언, 스텁 연결, 모듈 매크로)는 코드가 채운다. LLM은 케이스 본문만 쓴다.
+- **뼈대 제공**: 백엔드별 최소 뼈대(include 블록, 스위트 선언, 스텁 연결, 모듈 매크로, KUnit 케이스 테이블)는 코드가 케이스 목록에서 만든다. 대상 함수가 전역을 쓰면 케이스별 리셋 훅도 뼈대에 넣는다. LLM은 케이스 본문만 쓴다.
 
 ### 7.2 빨리 잡기: 단계별 검증
 
@@ -441,6 +456,8 @@ memcpy         external          pr_err         external
 | 4. 실행 | 테스트 실행 | 초~분 | 단정 실패, 크래시, 타임아웃 |
 
 1단계는 LLM 응답 직후 바로 돌릴 수 있어서, 흔한 실수의 대부분을 몇 초 안에 되돌려 줍니다.
+
+**경고 정책**: 컴파일 DB에 `-Werror`가 있거나 커널이 `CONFIG_WERROR=y`이면 실제 빌드는 경고도 오류입니다. 의미 검사도 같은 기준으로 경고를 오류로 보고하고 `warning_as_error`로 분류해 Fixer에 넘깁니다. 생성 테스트에서 가장 흔한 것은 미사용 변수·미사용 결과(`-Wunused-*`)와 부호 비교(`-Wsign-compare`)이며, 전용 프롬프트에 "경고를 끄지 말고 코드를 고치라"를 명시합니다.
 
 ### 7.3 정확히 진단하기
 
@@ -476,6 +493,10 @@ Diagnostic:
 | `undeclared_identifier` | `use of undeclared identifier` | `fix_case` | 비슷한 이름 후보와 상수 목록 제공 |
 | `type_mismatch` | `incompatible pointer types`, `too many arguments` | `fix_case` | 정확한 시그니처와 타입 정의 재제공 |
 | `undefined_reference` | 링크 단계 `undefined reference to` | `add_stub` | 스텁 도구로 해당 심볼 스텁 추가 |
+| `duplicate_symbol` | 링크 단계 `multiple definition of` | `add_stub` (교체 방식) | 스텁이 실제 정의와 충돌. 스텁 도구의 심볼 교체 방식 필요 (7.5) |
+| `warning_as_error` | `-Werror`로 경고가 오류가 됨 (`[-Werror=unused-variable]` 등) | `fix_case` | 경고 종류와 줄 제공. 경고 억제 대신 코드 수정 |
+| `header_not_cpp_clean` | 대상 헤더가 C++로 컴파일되지 않음 (gtest) | 종료 | 사람에게 안내 (7.5) |
+| `review_reject` | 코드 리뷰 검사(7.9)에 걸림 | `fix_case` | 걸린 검사 항목과 근거 제공 |
 | `assertion_failed` | 단정 실패 + 기대값/실제값 파싱됨 | `fix_case` (조건부) | 소스의 반환 지점과 대조해 "기대값이 틀렸는지, 소스가 틀렸는지" 판단 |
 | `timeout` | 실행 시간 초과 | `drop_case` | 무한 루프/대기 가능성. 1회만 `fix_case` 시도 |
 | `crash` | 세그폴트, oops, KASAN 등 (8장) | `fix_case` 1회 → `drop_case` | 크래시 브리프 기반 |
@@ -512,6 +533,16 @@ new → (검증) → pass
 - 재작성 단위는 케이스 하나. 파일 전체를 다시 쓰더라도 바뀌는 부분은 그 케이스뿐이다.
 - 최종 산출물은 `pass` 케이스만 담은 파일이다.
 
+#### 공유 영역의 변경 규칙
+
+케이스 밖에도 여러 케이스가 함께 쓰는 것이 있습니다. include 블록, 헬퍼 함수(예: 7.3의 `make_rb`), fixture·init/exit 코드, 스텁의 기본 동작이 그것입니다. 이를 **공유 영역**이라 부르고 케이스와 별도 상태로 관리합니다. 공유 영역이 바뀌면 글자 하나 안 바뀐 통과 케이스도 회귀할 수 있기 때문입니다.
+
+- 공유 영역의 변경은 케이스 하나의 수정이 아니라 **전체에 대한 수정**이다. 변경 뒤에는 모든 `pass` 케이스를 한 빌드로 다시 검증한다.
+- 재검증에서 회귀한 케이스가 있으면 공유 영역 변경을 되돌리고, Fixer에게 "공유 영역을 바꾸지 않는 방법"을 요구한다. 그래도 원래 실패 케이스가 남으면 그 케이스는 `drop_case`.
+- 스텁의 동작은 가능하면 **케이스 안에서** 설정한다(스텁 도구가 케이스별 반환값 설정을 지원하는 경우). 기본 동작을 바꾸는 `add_stub`는 공유 영역 변경으로 취급한다.
+- 헬퍼 함수는 Test Writer가 제안할 수 있지만 코드가 공유 영역으로 분리해 저장하고 어떤 케이스가 쓰는지 추적한다. 쓰는 케이스가 모두 제거되면 헬퍼도 제거한다.
+- 뼈대(include, 스위트 선언, KUnit 케이스 테이블, 모듈 매크로)는 항상 코드가 케이스 목록에서 다시 만든다. LLM은 뼈대를 쓰지 않는다.
+
 #### 전략 사다리
 
 Fixer가 고를 수 있는 전략은 다섯 가지이고, 올라갈수록 "덜 고치고 더 포기"합니다.
@@ -532,16 +563,24 @@ Fixer가 고를 수 있는 전략은 다섯 가지이고, 올라갈수록 "덜 �
 |---|---|---|
 | 케이스당 수정 횟수 `max_case_fixes` | 2 | 그 케이스 `dropped` |
 | 전체 수정 라운드 `max_iterations` | 4 | 남은 실패 케이스 모두 `dropped` |
-| 함수당 토큰 `max_tokens_per_function` | 60,000 | 즉시 종료, 현재까지 `pass` 케이스로 마무리 |
-| 함수당 빌드 횟수 `max_builds_per_function` | gtest 20 / KUnit 8 | 같음. 느린 빌드 환경의 실질 예산(7.7) |
-| 함수당 시간 `max_seconds_per_function` | gtest 900 / KUnit 4,800 | 같음 |
+| 함수당 토큰 `max_tokens_per_function` | 300,000 | 즉시 종료, 현재까지 `pass` 케이스로 마무리. 입력+출력 합계이며 호출 20회 안팎을 가정 |
+| 파일당 빌드 횟수 `max_builds_per_file` | gtest 30 / KUnit 10 | 같음. 느린 빌드 환경의 실질 예산(7.7, 7.8) |
+| 파일당 시간 `max_seconds_per_file` | gtest 1,800 / KUnit 7,200 | 같음 |
 | 커버리지 라운드 `max_coverage_rounds` | 3 | 미커버 줄을 사유와 함께 리포트에 남기고 리뷰로 |
 
-### 7.5 gtest 특화
+### 7.5 gtest 특화: 테스트 타깃 구성
 
-- `--gtest_output=json`으로 케이스별 결과와 실패 메시지(기대값/실제값 포함)를 구조화해 받는다.
-- `--gtest_filter=Suite.Case`로 케이스 격리.
-- 설정으로 ASan/UBSan을 켜면 세그폴트가 "어디서 어떤 메모리 오류"인지 메시지로 바뀐다.
+전제: **테스트 대상 소스는 이미 사용자 빌드(CMake 타깃)에 포함되어 있습니다.** GenUT는 대상 소스를 다시 컴파일하지 않고, 사용자 타깃을 링크하는 테스트 실행 파일을 만듭니다.
+
+| 항목 | 설계 |
+|---|---|
+| 테스트 타깃 | GenUT가 관리하는 `CMakeLists.txt`(위치는 `[gtest] cmake_lists_dir`, 사용자가 루트에서 `add_subdirectory`로 한 번 연결)에 테스트 실행 파일 타깃을 추가한다. 테스트 파일은 `[gtest] output_dir`에 쓴다 |
+| 링크 | `[gtest] link_targets`에 적힌 사용자 타깃을 링크한다. 비어 있으면 CMake File API로 대상 소스가 속한 타깃을 찾아 제안한다. `linkable` 판정(6.4)도 같은 정보로 한다 |
+| 전용 빌드 디렉터리 | `[gtest] cmake_build_dir`(기본 `build-genut`)를 GenUT가 구성한다. 사용자 빌드 디렉터리는 건드리지 않는다. 구성 시 커버리지 플래그(`--coverage` 또는 llvm 계열), 선택한 새니타이저, `coverage_opt_level`을 `CMAKE_C_FLAGS`/`CMAKE_CXX_FLAGS`에 넣으므로 대상 소스도 계측된 채 빌드된다. compile_commands.json은 이 디렉터리 것을 쓴다 |
+| C 소스를 C++ 테스트에서 | 뼈대의 include 블록을 `extern "C" { ... }`로 감싼다. 대상 헤더가 C++에서 컴파일되지 않으면(예: `new`를 식별자로 사용) `header_not_cpp_clean`으로 분류해 사람에게 안내한다 |
+| 스텁과 실제 정의의 충돌 | 링크된 타깃에 이미 정의가 있는 심볼을 스텁하면 중복 정의가 난다. 심볼 교체 방식(`--wrap`, weak 심볼, objcopy 등)은 스텁 도구 md가 정하며, GenUT는 `duplicate_symbol` 분류로 잡아 Stub Planner에 "이 심볼은 스텁 도구의 교체 방식 필요"로 전달한다 |
+| 실행 | `--gtest_output=json`으로 케이스별 결과와 기대값/실제값을 받는다. `--gtest_filter=Suite.Case`로 케이스 격리. 실행은 임시 작업 디렉터리에서 `test_timeout_sec` 안에 하고, 생성된 코드가 호스트를 건드리지 않도록 "작업 디렉터리 밖 파일·네트워크 접근 금지"를 기본 규칙 md에 둔다 |
+| 크래시 | 새니타이저 리포트 또는 gdb 배치 백트레이스로 크래시 브리프를 만든다(8.3) |
 
 ### 7.6 라인 커버리지 100% 목표
 
@@ -549,7 +588,7 @@ Fixer가 고를 수 있는 전략은 다섯 가지이고, 올라갈수록 "덜 �
 
 | | gtest | KUnit |
 |---|---|---|
-| 수집 방법 | 테스트 타깃을 `--coverage`(gcc) 또는 `-fprofile-instr-generate -fcoverage-mapping`(clang)으로 빌드, 실행 후 gcov/llvm-cov로 lcov 형식 생성 | 커널에 `CONFIG_GCOV_KERNEL=y`, 대상 파일에 `GCOV_PROFILE_<obj> := y` (사용자가 준비). 실행 스크립트가 게스트의 `/sys/kernel/debug/gcov`에서 데이터를 꺼내 lcov 형식 `coverage.info`로 `--coverage-out`에 저장 |
+| 수집 방법 | GenUT 전용 빌드 디렉터리(7.5)를 `--coverage`(gcc) 또는 `-fprofile-instr-generate -fcoverage-mapping`(clang)으로 구성해 대상 소스까지 계측, 실행 후 gcov/llvm-cov로 lcov 형식 생성 | 커널에 `CONFIG_GCOV_KERNEL=y`, 대상 파일에 `GCOV_PROFILE_<obj> := y` (사용자가 준비). 실행 스크립트가 게스트의 `/sys/kernel/debug/gcov`에서 데이터를 꺼내 lcov 형식 `coverage.info`로 `--coverage-out`에 저장 |
 | GenUT가 읽는 것 | lcov 트레이스파일(`SF:`, `DA:`, `BRDA:` 줄) | 같음 |
 | 계산 범위 | 대상 함수의 줄 범위(분석 단계에서 확정)만 | 같음 |
 
@@ -558,11 +597,12 @@ Fixer가 고를 수 있는 전략은 다섯 가지이고, 올라갈수록 "덜 �
 1. 통과 케이스로 실행한 결과에서 대상 함수의 미커버 줄을 뽑는다.
 2. 코드가 미커버 줄마다 **도달 조건**을 붙인다: 가장 가까운 분기문(`if`, `switch`, `?:`, 루프)의 조건식과 어느 쪽 분기인지, 그 조건에 등장하는 파라미터·스텁 반환값·전역.
    ```
-   미커버 :51  (rb_free_space(rb) < len) 참 분기 → -ENOSPC 반환
-            필요: rb_free_space 가 len 보다 작게. rb.cap=8, rb.head=0, rb.tail=7 이면 free=1
-   미커버 :63  (slot == NULL) 참 분기 → -ENOMEM 반환
-            필요: 스텁 rb_alloc_slot 이 NULL 반환
+   미커버 :51  조건 (rb_free_space(rb) < len) 이 참일 때 → -ENOSPC 반환
+            관련: rb_free_space (same_tu, rb->head/rb->tail/rb->cap 사용), 파라미터 len
+   미커버 :63  조건 (slot == NULL) 이 참일 때 → -ENOMEM 반환
+            관련: slot ← 스텁 rb_alloc_slot 의 반환값
    ```
+   코드는 **조건식과 관련 변수까지만** 제공합니다. 그 조건을 만족시키는 구체적인 값(예: `rb.cap=8, rb.tail=7`)은 Test Writer가 정합니다. 간단한 솔버는 후속 과제입니다.
 3. Test Writer에게 "다음 줄들을 실행시키는 케이스를 만들라"고 요청한다. 한 라운드에 미커버 줄 전부를 한 번에 요청해 빌드 1회로 끝낸다.
 4. 새 케이스는 평소와 같이 검증·수정 루프(⑥)를 거친다.
 5. 100%가 되거나 `max_coverage_rounds`(기본 3)를 넘으면 종료한다.
@@ -574,6 +614,7 @@ Fixer가 고를 수 있는 전략은 다섯 가지이고, 올라갈수록 "덜 �
 | `unreachable_defensive` | `BUG_ON`, `WARN_ON`, 방어적 NULL 검사처럼 정상 입력으로 도달할 수 없는 줄 |
 | `needs_stub_behavior` | 스텁이 특정 값을 돌려줘야 도달하는데 현재 스텁 도구로 표현할 수 없는 경우 |
 | `config_dependent` | `#ifdef`로 현재 빌드 설정에서 컴파일되지 않는 줄 (커버리지 계산에서 제외) |
+| `optimized_out` | 최적화로 줄이 합쳐지거나 사라져 커버리지 데이터에 나타나지 않는 줄. 커널 -O2에서 흔하다. gtest는 `[gtest] coverage_opt_level = "O0"`로 피할 수 있다 |
 | `unknown` | 사람이 확인 |
 
 리포트에는 "라인 커버리지 97% (58/60), 미커버 :45 unreachable_defensive, :63 needs_stub_behavior"처럼 적어 100%에 못 미친 이유가 항상 남게 합니다.
@@ -584,15 +625,42 @@ Fixer가 고를 수 있는 전략은 다섯 가지이고, 올라갈수록 "덜 �
 
 KUnit 빌드·실행은 QEMU에서 1회 약 8분이 걸립니다. 빌드 횟수가 곧 소요 시간이므로 다음을 적용합니다.
 
-- **예산을 빌드 횟수로 표현**: `max_builds_per_function`(KUnit 기본 8). 시작 시 "예상 최대 64분"을 터미널에 보여 준다.
+- **예산을 빌드 횟수로 표현**: `max_builds_per_file`(KUnit 기본 10). 시작 시 "예상 최대 80분"을 터미널에 보여 준다.
 - **빌드 전에 최대한 걸러 내기**: 1단계 의미 검사(초 단위)를 통과한 후보만 빌드한다. 후보가 여러 개면 의미 검사를 통과한 것만 남기고, 그 케이스들을 한 파일에 합쳐 **한 번에** 빌드한다.
 - **스모크 단계 생략**: 사전검증 빌드 시간이 `slow_build_threshold_sec`(기본 120초)를 넘으면 스모크(④)를 건너뛰고 확장(⑤) 케이스를 바로 만든다. 의미 검사가 스모크의 역할(빌드 오류 조기 발견)을 대신한다.
-- **사전검증 캐시**: 뼈대+스텁 해시가 이전 실행과 같으면 사전검증 빌드를 건너뛴다.
+- **사전검증 캐시**: 뼈대+스텁, `.config`, compile_commands.json, 실행 스크립트의 해시가 이전 실행과 모두 같으면 사전검증 빌드를 건너뛴다. 사전검증은 스크립트를 `--mode build`로만 부른다.
 - **크래시 격리 제한**: `max_isolation_runs` KUnit 기본 2. 1차 용의자("마지막으로 시작된 케이스")만 재실행하고, 재현되지 않으면 용의자를 제거하고 넘어간다.
 - **수정 라운드 묶기**: 한 라운드에서 실패한 케이스를 모두 고친 뒤 한 번에 빌드한다. 케이스별로 빌드하지 않는다.
 - **커버리지는 항상 함께 수집**: 별도 커버리지 실행이 없다.
 
-예상 빌드 횟수(KUnit, 정상 경로): 사전검증 1 + 확장 1 + 수정 1~2 + 커버리지 1~2 = 4~6회, 약 32~48분.
+예상 빌드 횟수(KUnit, 함수 1개, 정상 경로): 사전검증 1 + 확장 1 + 수정 1~2 + 커버리지 1~2 = 4~6회, 약 32~48분. 함수가 여럿이면 7.8의 파일 단위 처리로 묶습니다.
+
+### 7.8 파일 단위 처리
+
+입력 단위는 "파일 + 함수"이지만, 함수를 생략하면 파일의 모든 비static 함수가 대상입니다. 이때 함수마다 따로 빌드하면 KUnit에서는 함수 10개에 5시간이 넘습니다. 그래서 **테스트 파일은 소스 파일당 하나**이고, 여러 함수의 케이스가 한 파일에 들어가 **한 빌드로 함께 검증**됩니다. KUnit 실행 스크립트는 테스트 파일에 든 케이스를 모두 실행하므로 이 방식과 맞습니다.
+
+- 분석(①)과 스텁 계획(②)은 함수마다 한다. 스텁은 파일 단위로 합친다(같은 심볼은 한 번만).
+- 사전검증(③)은 파일당 1회.
+- 작성(④⑤), 수정(⑥), 커버리지(⑦)는 **라운드마다 모든 함수의 케이스를 모아 한 번 빌드**한다. LLM 호출은 프롬프트를 작게 유지하기 위해 함수별로 하되, 빌드와 실행은 묶는다.
+- 케이스 상태(`TestCase`)는 `target_function` 필드를 가진다. 빌드 횟수·시간 예산은 **파일 단위**(`max_builds_per_file`, `max_seconds_per_file`), 토큰·수정 횟수 예산은 함수 단위다.
+- 한 함수가 예산을 다 써도 다른 함수의 진행은 계속된다. 리포트는 함수별 결과와 파일 전체 커버리지를 함께 보여 준다.
+- 함수 하나만 지정했을 때도 같은 경로를 쓴다(함수 1개짜리 파일 단위 처리).
+
+예상 빌드 횟수(KUnit, 함수 10개 파일): 사전검증 1 + 확장 1 + 수정 2~3 + 커버리지 2~3 = 6~8회, 약 48~64분. 함수별로 처리했을 때의 40~60회와 비교됩니다.
+
+### 7.9 코드가 하는 리뷰 검사
+
+Reviewer 에이전트(⑧) 전에 코드가 다음을 검사합니다. LLM보다 확실하고 비용이 없으므로 케이스가 `pass`가 되는 즉시 실행하며, 걸리면 그 케이스는 `pass`가 아니라 `fail`(분류 `review_reject`)로 Fixer에 돌아갑니다.
+
+| 검사 | 방법 |
+|---|---|
+| 단정 없음 | 케이스 본문의 `EXPECT_*`/`ASSERT_*`/`KUNIT_EXPECT_*`/`KUNIT_ASSERT_*` 개수가 0 |
+| 항상 참인 단정 | `EXPECT_TRUE(true)`, 같은 식끼리 비교(`EXPECT_EQ(x, x)`), 상수끼리 비교 |
+| 금지 패턴 | 규칙 md의 "절대 금지"·"리뷰에서 거부할 패턴" 항목을 정규식으로 |
+| 실제값 베끼기 | Fixer가 기대값 리터럴을 **직전 실패의 실제값과 똑같은 값**으로 바꿨는지 diff와 실패 기록을 대조. 걸리면 Fixer에게 소스 반환 지점(6.3)을 근거로 정당화를 요구하고, 정당화가 없으면 `suspected_bug`로 전환 |
+| 대상 함수 미호출 | 케이스 본문에 대상 함수 호출이 없음 |
+
+LLM Reviewer는 이 검사를 통과한 케이스에 대해 "의미 있는 단정인가", "규칙의 의도를 지켰는가"처럼 코드로 판단하기 어려운 것만 봅니다.
 
 ---
 
@@ -618,7 +686,7 @@ not ok 2 test_rb_push_when_full
         rb_push(&rb, data, 8) == 0 (0x0)
         -ENOSPC == -28 (0xffffffe4)
 ```
-이 블록은 거의 그대로 유지합니다. 기대값·실제값이 수정의 핵심 단서입니다.
+이 블록은 거의 그대로 유지합니다. 기대값·실제값이 수정의 핵심 단서입니다. `ASSERTION FAILED`(`KUNIT_ASSERT_*`)와 `# <case>: ... timed out`도 같은 방식으로 뽑습니다.
 
 **3단계: 크래시 브리프** (8.3)
 
@@ -669,12 +737,14 @@ not ok 2 test_rb_push_when_full
 | `lockdep` | 락을 잡은 채 호출, 또는 스텁이 락 해제 안 함 | 스텁에 락 해제 추가 / 케이스 제거 |
 | `hang_timeout` | 무한 루프 또는 대기 | 1회 수정 후 제거 |
 
+**gtest의 크래시 브리프**: 유저 스페이스에서도 같은 형식으로 만듭니다. 세그폴트가 나면 gtest의 JSON 결과 파일이 써지지 않으므로, stdout의 마지막 `[ RUN      ] Suite.Case` 줄로 1차 용의자를 정합니다. 새니타이저가 켜져 있으면 ASan/UBSan 리포트(`ERROR: AddressSanitizer: heap-use-after-free ... #0 ... in func file:line`)를 파싱해 분류(`asan_uaf`, `asan_oob`, `ubsan_*`)와 책임 프레임을 얻습니다. 새니타이저 없이 세그폴트가 나면 `gdb -batch -ex run -ex bt`로 한 번 더 실행해 백트레이스를 얻습니다(`[gtest] crash_backtrace = "gdb"`, gdb가 없으면 생략).
+
 ### 8.4 케이스 격리
 
 크래시가 나면 커널(또는 프로세스)이 죽어서 **어느 케이스에서 났는지** 로그만으로 모를 때가 많습니다.
 
 1. KTAP에서 마지막으로 `ok`/`not ok`가 찍힌 케이스 다음 케이스를 1차 용의자로 본다.
-2. 확실하지 않으면 Runner의 `case_filter`로 **용의자 케이스만** 다시 실행한다. 재현되면 확정.
+2. 확실하지 않으면 **용의자 케이스만** 다시 실행한다. gtest는 `--gtest_filter`로, KUnit은 스크립트가 `--filter`를 지원하면 `--mode run`으로 빌드 없이, 지원하지 않으면 용의자 케이스만 담은 파일을 써서 다시 빌드·실행한다. 재현되면 확정.
 3. 재현되지 않으면(순서 의존) 남은 케이스를 하나씩 실행한다. 비용이 크므로 `max_isolation_runs`(기본 4)로 제한한다.
 4. 범인 케이스에 `fix_case` 1회 → 실패하면 `drop_case`.
 
@@ -697,13 +767,14 @@ not ok 2 test_rb_push_when_full
 - 개발·테스트: Claude (Anthropic Messages API)
 - 운영: 사내 Gemma 4 (OpenAI 호환 엔드포인트, 9~12B급, 32k~128k 컨텍스트, function calling과 JSON schema 지원)
 - 설정 한 줄로 교체. 교체 후에도 성공률이 유지되도록 **설계 기준은 Gemma 4**.
+- **데이터 정책**: 프롬프트에는 대상 소스가 들어간다. 외부 API인 Claude로는 샘플 코퍼스와 평가 코퍼스만 돌리고, 실제 프로덕트 코드는 사내 Gemma 4로만 처리한다. `genut doctor`는 provider가 `anthropic`인데 프로덕트 루트가 샘플 경로가 아니면 경고한다.
 
 ### 9.2 계층
 
 ```mermaid
 flowchart LR
     subgraph 에이전트
-        A[Analyzer] & B[Stub Planner] & C[Test Writer] & D[Fixer] & E[Reviewer]
+        A[Analyzer] & B[Stub Planner] & C[Test Writer] & D[Fixer] & E[Reviewer] & N[Note Keeper]
     end
     에이전트 --> S[structured.py<br/>스키마 출력 공통 계층]
     S --> P[ChatProvider 인터페이스]
@@ -737,6 +808,10 @@ class ChatProvider(Protocol):
 1. `json_schema` 지원 → 스키마를 넘겨 제약 디코딩. 거의 실패하지 않음.
 2. 미지원 → 프롬프트에 스키마와 예시를 넣고 응답에서 JSON 블록을 추출. 파싱·검증 실패 시 오류 메시지를 붙여 최대 2회 재요청.
 3. 그래도 실패 → 해당 에이전트 호출 실패로 기록하고 오케스트레이터가 재시도 또는 다음 전략으로.
+
+**전송 오류**: HTTP 429/5xx, 타임아웃, 연결 끊김은 구조화 출력 실패와 별개로 Provider 계층이 처리합니다. 지수 백오프(1, 2, 4, 8초)로 최대 `max_retries`(기본 4)회 재시도하고, 그래도 실패하면 `infra_error`로 실행을 중단합니다. 재시도는 토큰 예산을 소모하지 않지만 시간 예산은 소모합니다. 응답이 출력 한도에 걸려 잘렸으면(`finish_reason = length`) 재시도하지 않고 구조화 출력 실패로 넘겨, 출력 예약(9.7)을 늘려 1회 재요청합니다.
+
+**코드가 든 출력**: 테스트 소스를 JSON 문자열로 받으면 따옴표·개행 이스케이프에서 중형 모델이 자주 깨집니다. 제약 디코딩이 있으면 JSON은 유효하지만 코드 품질이 떨어질 수 있습니다. 그래서 두 형식을 모두 구현합니다. (a) 기본 `code_format = "json"`: 케이스 목록 전체를 JSON 스키마로. (b) 대안 `code_format = "fenced"`: 메타데이터(이름, 목적, 전략)는 JSON, 케이스 소스는 그 뒤에 케이스 이름을 붙인 펜스 블록으로. 코드가 둘을 같은 pydantic 모델로 합칩니다. 어느 쪽이 Gemma 4에서 성공률이 높은지 `genut eval`로 비교해 기본값을 정합니다(14단계).
 
 Gemma 4가 둘 다 지원하므로 1번이 기본이지만, 2번 경로도 FakeProvider로 항상 테스트해 둡니다(다른 모델로 바꿀 때를 대비).
 
@@ -790,7 +865,7 @@ max_context = 32768
 4. 1번 조각만으로도 넘치면 **LLM을 부르지 않고** `context_overflow` 실패로 기록합니다. 오케스트레이터는 `narrow_scope`로 넘어가고, 리포트에 "규칙 md 길이를 줄이라"는 안내를 남깁니다.
 5. 어떤 조각이 얼마나 잘렸는지 `trace.jsonl`에 기록하고 `genut view`의 호출 카드에 표시합니다. 규칙 md가 길어 매번 다른 조각이 잘리는 상황을 여기서 잡습니다.
 
-토큰 세기: Gemma 4 토크나이저를 로컬에 둘 수 없는 환경을 고려해 기본은 **보수적 추정**입니다(영문 4자당 1토큰, 한글은 글자당 1.5토큰, 코드는 3자당 1토큰). `genut doctor`가 실제 API 응답의 `usage`와 추정치를 비교해 보정 계수를 `config.toml`에 기록하고, 이후 추정에 곱합니다. 추정치는 항상 실제보다 크게 잡습니다. Anthropic provider는 토큰 세기 API를 그대로 씁니다.
+토큰 세기: Gemma 4 토크나이저를 로컬에 둘 수 없는 환경을 고려해 기본은 **보수적 추정**입니다(영문 4자당 1토큰, 한글은 글자당 1.5토큰, 코드는 3자당 1토큰). `genut doctor`가 실제 API 응답의 `usage`와 추정치를 비교해 보정 계수를 `$GENUT_HOME/knowledge/token_calibration.json`에 기록하고, 이후 추정에 곱합니다. OpenAI 호환 서버가 `/tokenize` 엔드포인트를 제공하면(vLLM 등) `token_counter = "api"`로 추정 대신 그것을 씁니다. 추정치는 항상 실제보다 크게 잡습니다. Anthropic provider는 토큰 세기 API를 그대로 씁니다.
 
 이렇게 하면 9.5의 "호출당 8k 이내"가 원칙이 아니라 코드가 보장하는 성질이 됩니다. Claude로 개발할 때는 한도가 커서 티가 나지 않지만 Gemma 4로 바꾸는 순간 가장 먼저 부딪히는 문제이므로 2단계(LLM 계층)에 함께 구현합니다.
 
@@ -843,10 +918,10 @@ class StubAdapter(Protocol):
 
 | 명령 | 하는 일 |
 |---|---|
-| `genut init` | 대화형으로 `genut.toml` 생성. compile DB·스크립트 경로를 탐지해 제안. `rules/` 기본 템플릿 복사 |
+| `genut init` | 대화형으로 `config.toml`과 `product.toml` 생성. compile DB·스크립트 경로를 탐지해 제안. `rules/` 기본 템플릿 복사 |
 | `genut doctor` | libclang, compile DB, 실행 스크립트, Provider 연결, 스키마 출력 지원, 커버리지 도구(gcov/llvm-cov), 샘플 preflight를 점검. KUnit이면 `test_file` 경로가 커널 트리 안에 있고 같은 디렉터리 Makefile에 오브젝트가 등록되어 있는지, Kconfig 심볼과 `CONFIG_GCOV_KERNEL`이 `.config`에 켜져 있는지, 대상 파일에 `GCOV_PROFILE`이 설정되어 있는지도 확인. 문제를 한국어로 설명하고 해결 방법 안내 |
-| `genut gen --file F [--func NAME] [--backend gtest\|kunit] [--out PATH]` | 테스트 생성. 함수를 생략하면 파일의 모든 비static 함수를 **순차**로 처리. 항상 새 파일을 만들며 기존 테스트와 병합하지 않는다 |
-| `genut show <run\|latest>` | 터미널 요약 |
+| `genut gen --file F [--func NAME] [--backend gtest\|kunit] [--out PATH]` | 테스트 생성. 함수를 생략하면 파일의 모든 비static 함수가 대상이며, 테스트 파일은 소스 파일당 하나이고 빌드는 묶어서 한다(7.8). 파일 간·프로덕트 간은 순차 처리. 항상 새 파일을 만들며 기존 테스트와 병합하지 않는다. KUnit에서 `--out`으로 `test_file`을 덮어쓰면 Makefile 등록 전제가 깨질 수 있어 doctor 점검을 먼저 한다 |
+| `genut show <run\|latest>` | 터미널 요약. `latest`는 현재 프로덕트의 최신 실행 |
 | `genut view <run\|latest>` | HTML 뷰어 생성 (단일 파일, 브라우저로 열기) |
 | `genut diff <run1> <run2>` | 두 실행 비교 |
 | `genut replay <run> --from <stage>` | 기록된 LLM 응답을 재사용해 특정 단계부터 재실행 |
@@ -899,7 +974,7 @@ $GENUT_HOME/products/<이름>/runs/20261022-143012-rb_push/
 의존성 없는 단일 HTML 파일로, 실행 하나를 다음처럼 보여 줍니다.
 
 - **상단 요약**: 함수, 결과(통과/제거/의심), 소요 시간, 토큰, 사용한 모델, 규칙 md 버전
-- **타임라인**: 7단계를 가로로. 각 단계를 펼치면
+- **타임라인**: 8단계를 가로로. 각 단계를 펼치면
   - 에이전트 호출: 프롬프트 전문과 응답 전문(접힘), 파싱된 결과
   - 도구 호출: 빌드/실행 명령, 종료 코드, 소요 시간
   - 판정: 왜 다음 단계로 갔는지 / 왜 수정 루프에 들어갔는지
@@ -976,6 +1051,7 @@ $GENUT_HOME/products/<이름>/
 │   ├── product.md           # 프로덕트 지식
 │   ├── linkscope.cache.json
 │   ├── preflight.cache.json
+│   ├── fix_patterns.yaml    # 프로덕트 심볼이 든 수정 사례
 │   └── suspected_bugs.md
 ├── runs/
 └── evals/corpus/
@@ -1008,7 +1084,7 @@ $GENUT_HOME/products/<이름>/
 **Note Keeper**는 실행이 끝난 뒤 실행 기록을 보고 "다음에 도움이 될 사실"을 뽑아 노트로 남기는 에이전트입니다. 노트마다 `scope: global | product`와 근거를 함께 냅니다. 코드가 다음 규칙으로 검증합니다.
 
 1. 노트에 프로덕트 루트 아래 경로, 프로덕트 분석에서 나온 심볼·타입 이름, 프로덕트 설정값이 하나라도 있으면 **무조건 프로덕트**로 강등한다.
-2. 공통 노트는 "어떤 프로덕트에서도 참"이어야 한다. 처음에는 **공통 후보**로 프로덕트 지식에 저장되고, 다른 프로덕트에서도 같은 노트(내용 해시)가 생기면 자동으로 공통으로 승격된다(`auto_promote_after_products`, 기본 2). 사람이 `genut knowledge promote <id>`로 바로 승격할 수도 있다.
+2. 공통 노트는 "어떤 프로덕트에서도 참"이어야 한다. 처음에는 **공통 후보**로 프로덕트 지식에 저장되고, 다른 프로덕트에서도 같은 노트가 생기면 자동으로 공통으로 승격된다(`auto_promote_after_products`, 기본 2). "같은 노트"는 문장 해시가 아니라 **정규화 키**(실패 분류 + 전략 + 프로덕트 심볼·경로를 자리표시자로 바꾼 문장)로 비교한다. 자동 승격이 되지 않아도 `genut knowledge list --candidates`가 분류별로 후보를 묶어 보여 주므로 사람이 `genut knowledge promote <id>`로 승격할 수 있다.
 3. 노트는 짧은 한 문장 + 근거 실행 ID. 예:
    - 공통: "KUnit에서 `kunit_kzalloc` 결과를 구조체 포인터 필드에 넣지 않으면 null_deref가 난다 (runs: alpha/…, beta/…)"
    - 프로덕트: "`drivers/foo/foo.c`의 `foo_init`은 `foo_hw_reset` 스텁이 0을 반환해야 정상 경로로 간다 (run: 20261022-…)"
@@ -1024,7 +1100,7 @@ $GENUT_HOME/products/<이름>/
 | 역할 프롬프트 | 공통 | 에이전트별 지시문 |
 | 스텁 도구 md | 공통, 프로덕트가 있으면 우선 | Stub Planner와 Test Writer 프롬프트 |
 | 지식 노트 (`global.md`, `product.md`) | 공통 / 프로덕트 | Test Writer와 Fixer 프롬프트에 토큰 예산 안에서 삽입 |
-| 실패 패턴 → 수정 사례 (`fix_patterns.yaml`) | 공통 | 분류된 실패에 맞는 과거 성공 수정을 Fixer 프롬프트에 예시로 제공 |
+| 실패 패턴 → 수정 사례 (`fix_patterns.yaml`) | 공통 / 프로덕트 | 분류된 실패에 맞는 과거 성공 수정을 Fixer 프롬프트에 예시로 제공. 프로덕트 심볼이 든 사례는 프로덕트 파일에 |
 | 플래그 정제 학습 목록 | 공통 | 커널 compile_commands 정제 시 제거 목록에 합침 |
 | 소스 버그 의심 목록 (`suspected_bugs.md`) | 프로덕트 | 같은 함수를 다시 생성할 때 "이전에 소스 문제로 제외된 케이스"를 Test Writer·Fixer에 알려 같은 시도를 반복하지 않게 함. 대상 함수 본문 해시가 바뀌었으면 무효 |
 | 링크 범위 캐시, 사전검증 캐시 | 프로덕트 | 분석과 사전검증을 건너뛰거나 빠르게 처리 |
@@ -1054,6 +1130,8 @@ provider = "anthropic"            # "anthropic" | "openai_compat" | "fake"
 model = "claude-sonnet-5-5"
 temperature = 0.2
 prompt_language = "en"            # 역할 지시문 언어 ("en" | "ko"). 규칙 md는 한국어 그대로 삽입
+code_format = "json"             # 테스트 소스 출력 형식 "json" | "fenced" (9.4)
+max_retries = 4                   # 전송 오류 재시도 횟수 (9.4)
 
 [llm.anthropic]
 api_key_env = "ANTHROPIC_API_KEY"
@@ -1070,7 +1148,7 @@ supports_n = false
 output_reserve_tokens = 6000      # 응답 자리로 비워 두는 토큰
 context_safety_margin = 0.05      # 추정 오차 여유 (비율)
 token_counter = "estimate"        # "estimate" | "api" (Anthropic은 api)
-estimate_calibration = 1.0        # genut doctor 가 실제 usage 와 비교해 갱신
+# 추정 보정 계수는 genut doctor 가 $GENUT_HOME/knowledge/token_calibration.json 에 기록
 
 [budget]                          # 기본값. 프로덕트 설정에서 덮어쓸 수 있음
 candidates = 1                    # 후보 수 (Gemma 권장 3)
@@ -1078,9 +1156,9 @@ parallel_candidates = false
 max_iterations = 4                # 전체 수정 라운드
 max_case_fixes = 2                # 케이스당 수정 횟수
 max_isolation_runs = 4            # 크래시 격리 재실행 횟수 (KUnit 권장 2)
-max_builds_per_function = 20      # 빌드 횟수 상한 (KUnit 권장 8)
-max_seconds_per_function = 900    # KUnit 권장 4800
-max_tokens_per_function = 60000
+max_builds_per_file = 30          # 파일당 빌드 횟수 상한 (KUnit 권장 10). 7.8
+max_seconds_per_file = 1800       # 파일당 시간 상한 (KUnit 권장 7200)
+max_tokens_per_function = 300000  # 입력+출력 합. 호출 20회 안팎 가정
 max_coverage_rounds = 3           # 커버리지 확장 라운드
 slow_build_threshold_sec = 120    # 사전검증이 이보다 느리면 스모크 생략
 log_token_budget = 4000           # 축약 로그 상한
@@ -1106,21 +1184,26 @@ root = "/path/to/foo-driver"      # 소스 트리 루트. genut gen 은 현재 �
 backend = "kunit"                 # "gtest" | "kunit"
 
 [gtest]
-compile_commands = "build/compile_commands.json"
 cmake_source_dir = "."
-cmake_build_dir = "build"
-gtest_root = ""                   # 비우면 find_package
+cmake_build_dir = "build-genut"   # GenUT 전용 빌드 디렉터리. 사용자 빌드는 건드리지 않음. compile_commands.json 도 여기 것 (7.5)
+cmake_configure_args = []         # 전용 빌드 구성에 추가할 -D 옵션
+cmake_lists_dir = "tests/generated"   # GenUT 가 관리하는 CMakeLists.txt 위치. 사용자가 루트에서 add_subdirectory 로 연결
 output_dir = "tests/generated"    # 최종 테스트 파일 위치 (CLI --out 으로 덮어쓰기)
+link_targets = ["mylib"]          # 테스트가 링크할 사용자 타깃. 비우면 CMake File API 로 제안
+gtest_root = ""                   # 비우면 find_package
 sanitizers = []                   # ["address", "undefined"]
+coverage_opt_level = "O0"         # 전용 빌드의 최적화 수준. "" 이면 사용자 설정 유지
+crash_backtrace = "gdb"           # 새니타이저 없는 세그폴트 때 gdb 배치 백트레이스. "" 이면 생략
 test_timeout_sec = 60
 
 [kunit]
 compile_commands = "/path/to/linux/compile_commands.json"
 kernel_src = "/path/to/linux"
 test_file = "drivers/foo/foo_test.c"        # 사용자가 Makefile/Kconfig에 미리 등록한 경로 (kernel_src 기준, CLI --out 으로 덮어쓰기)
-run_script = "scripts/kunit_build_run.sh"   # 계약: <test_file> [--filter suite.case] --log <path> [--coverage-out <dir>]
+run_script = "scripts/kunit_build_run.sh"   # 계약: <test_file> --mode build|run|all [--filter suite.case] --log <path> [--coverage-out <dir>]
+script_supports_filter = false    # 스크립트가 --filter 를 지원하면 true. false 면 격리는 파일 재작성으로 (8.4)
+script_timeout_sec = 3600         # 스크립트 1회 상한. clean 빌드 시간에 맞춰 조정
 vmlinux = ""                      # 비우면 심볼화 생략
-test_timeout_sec = 600
 static_access = "stub_tool"       # "stub_tool" (스텁 도구가 static 접근 제공) | "include_source" (NoopStub용 폴백)
 
 [analysis]
@@ -1128,8 +1211,8 @@ include_struct_fields = true
 max_struct_fields = 30
 
 [budget]                          # 공통 기본값 중 이 프로덕트에서 바꿀 것만
-max_builds_per_function = 8
-max_seconds_per_function = 4800
+max_builds_per_file = 10
+max_seconds_per_file = 7200
 max_isolation_runs = 2
 candidates = 3
 ```
@@ -1141,8 +1224,10 @@ candidates = 3
 | 항목 | 내용 |
 |---|---|
 | 전제 | 테스트 파일 경로(`[kunit] test_file`)가 **GenUT 실행 전에** 사용자에 의해 해당 디렉터리의 Makefile과 Kconfig에 등록되어 있어야 한다. GenUT는 커널 트리의 빌드 설정을 수정하지 않으며, 그 경로에 테스트 파일을 쓰기만 한다 |
-| 호출 | `<script> <test_file> [--filter <suite>.<case>] --log <path> [--coverage-out <dir>]` |
-| 하는 일 | 이미 등록된 테스트 파일을 포함해 커널(또는 모듈)을 빌드하고 QEMU에서 실행 (1회 약 8분) |
+| 호출 | `<script> <test_file> --mode build\|run\|all [--filter <suite>.<case>] --log <path> [--coverage-out <dir>]` |
+| 하는 일 | `--mode build`: 등록된 테스트 파일을 포함해 커널(또는 모듈)을 빌드만. `--mode run`: 마지막 빌드 결과를 QEMU에서 실행만. `--mode all`: 둘을 연달아. 증분 빌드+실행 1회 약 8분이며, 설정 변경 뒤 첫 빌드는 훨씬 길 수 있다 |
+| GenUT의 사용 | 사전검증(③)은 `build`만. 케이스 격리 재실행(8.4)은 파일이 바뀌지 않았을 때 `run`만. 그 외는 `all`. 1회 상한은 `script_timeout_sec` |
+| 필터 | `--filter`는 선택(`script_supports_filter`). 지원하지 않으면 GenUT는 용의자 케이스만 담은 파일을 써서 `all`로 다시 돌린다 |
 | 커버리지 | `--coverage-out <dir>`가 주어지면 실행 후 게스트의 `/sys/kernel/debug/gcov` 데이터를 lcov 형식 `<dir>/coverage.info`로 저장. `CONFIG_GCOV_KERNEL`과 대상 파일의 `GCOV_PROFILE` 설정은 사용자가 준비 |
 | 종료 코드 | 0 = 실행 완료(테스트 결과는 로그로 판단), 10 = 빌드 실패, 20 = 실행 실패(부팅 불가 등), 그 외 = 스크립트 오류 |
 | 출력 | 전체 로그는 `--log` 파일에. stdout은 짧은 진행 메시지만 |
@@ -1163,10 +1248,10 @@ candidates = 3
 | 3 | 분석기 | compile_db, flag_sanitizer, parser, extractor, linkscope, summarizer | c_samples 픽스처로 추출 결과 테스트, 실제 커널 플래그 샘플로 정제 테스트 |
 | 4 | 검증 기반 | diagnostics, classify, staged(의미 검사), reduce | gcc/clang 출력 샘플로 파싱·분류 테스트, 축약 상한 준수 테스트 |
 | 5 | 규칙·에이전트 | rules, Agent base, Analyzer, Test Writer | FakeProvider로 전 과정 |
-| 6 | gtest 백엔드 | cmake_runner, preflight, backend, NoopStub | sample_project e2e (cmake/gtest 있을 때만) |
-| 7 | 수정 루프 + 관찰 도구 | Fixer, 스모크→확장, 후보 다중, 격리, 빌드 횟수 예산, 느린 빌드 대응(스모크 생략·사전검증 캐시), `view`, `replay`, `--dry-run`, `--stop-after` | FakeProvider 시나리오(1회 실패 후 성공, drop_case, give_up), 뷰어 렌더링 테스트 |
+| 6 | gtest 백엔드 | cmake_runner(전용 빌드 디렉터리, CMakeLists 관리, CMake File API, `extern "C"` 뼈대), preflight, backend, NoopStub, ASan/UBSan 파서, gdb 백트레이스 | sample_project e2e (cmake/gtest 있을 때만), 새니타이저 로그 픽스처 |
+| 7 | 수정 루프 + 관찰 도구 | Fixer, 스모크→확장, 케이스 단위 후보 합치기, 공유 영역 재검증, 코드 리뷰 검사(7.9), 파일 단위 처리(7.8), 격리, 빌드 횟수 예산, 느린 빌드 대응(스모크 생략·사전검증 캐시), `view`, `replay`, `--dry-run`, `--stop-after` | FakeProvider 시나리오(1회 실패 후 성공, drop_case, give_up, 공유 영역 회귀 롤백, 실제값 베끼기 검출), 뷰어 렌더링 테스트 |
 | 8 | 커버리지 확장 | lcov 파서, 대상 함수 줄 범위 계산, 미커버 줄→도달 조건 추출, 커버리지 라운드, 도달 불가 분류, gtest 커버리지 빌드 플래그 | lcov 픽스처로 파싱·조건 추출 테스트, sample_project에서 100% 도달 e2e |
-| 9 | KUnit 백엔드 | script_runner(`--coverage-out` 포함), ktap, crash, symbolize, backend, `docs/kunit-script.md` | KTAP/oops/KASAN 로그 픽스처로 축약·분류·책임 프레임 테스트, 가짜 스크립트로 계약 테스트 |
+| 9 | KUnit 백엔드 | script_runner(`--mode`, `--coverage-out`, 필터 폴백), ktap(EXPECTATION/ASSERTION/timeout), crash, symbolize, built-in/모듈 링크 범위 판정, backend, `docs/kunit-script.md` | KTAP/oops/KASAN 로그 픽스처로 축약·분류·책임 프레임 테스트, 가짜 스크립트로 계약 테스트 |
 | 10 | Reviewer + 평가 | reviewer(커버리지용 케이스의 단정 검사 포함), evals/corpus, `genut eval` | Claude 기준치 측정 |
 | 11 | 스텁 어댑터 | 백엔드별 `stub_adapter.py` (셋업 시 제공되는 md 기반) | 스텁 포함 e2e |
 | 12 | C++ 인스턴스 멤버 함수 | 생성자·멤버 상태 추출, gtest fixture 생성 | C++ 샘플 e2e |
@@ -1196,7 +1281,7 @@ candidates = 3
 
 검토 중 결정이 필요한 항목입니다. 답이 정해지면 본문에 반영하고 아래 "결정된 항목"으로 옮깁니다. 번호는 유지합니다.
 
-**현재 열린 질문은 없습니다.** 검토 중 새 질문이 생기면 14번부터 번호를 붙여 여기에 추가합니다.
+**현재 열린 질문은 없습니다.** 검토 중 새 질문이 생기면 20번부터 번호를 붙여 여기에 추가합니다.
 
 ### 결정된 항목
 
@@ -1204,15 +1289,20 @@ candidates = 3
 |---|---|---|---|
 | 1 | KUnit 테스트 파일 배치와 Kconfig/Makefile 반영 | 테스트 파일 경로는 사용자가 설정(`[kunit] test_file`)으로 지정한다. Kconfig/Makefile 등록은 GenUT 실행 전에 사용자가 한다. GenUT는 커널 빌드 설정을 수정하지 않는다 | 11.1 doctor 점검, 12장 설정·스크립트 계약 |
 | 2 | static 함수 접근 방식 | gtest·KUnit 스텁 도구 모두 static 함수에 접근할 수 있으므로 스텁 도구에 맡긴다. GenUT는 static 여부만 표시하고 접근 코드는 스텁 도구 md의 방식을 따른다. `include_source`는 NoopStub용 폴백으로만 남긴다 | 5.4 예시, 6.3, 10.1, 10.4, 12장 `static_access` |
-| 5 | 규칙 md 언어 | 규칙 md는 한국어로 쓴다. 역할 지시문은 영어 기본이며 `prompt_language`로 한국어 전환 가능. 혼용 효과는 eval로 비교한다 | 5.3, 9.5, 12장 `prompt_language` |
 | 3 | 스텁 도구 md 제공 시점 | GenUT를 대상 프로젝트에 셋업할 때 두 md가 모두 제공된다. 개발 단계는 NoopStub | 10.1, 13장 11단계 |
 | 4 | 기존 테스트 파일과의 관계 | 항상 새 파일을 만든다. 병합하지 않는다 | 12장 `output_dir`/`test_file` |
 | 6 | Gemma 4 n 샘플링 | 미지원. 후보는 반복 호출로 만들고 `parallel_candidates`로 동시 요청 | 9.5, 12장 `supports_n = false` |
 | 7 | 평가 코퍼스 | 샘플 프로젝트로 시작한다 | 13.3 |
 | 8 | 커버리지 기준 | 대상 함수 **라인 커버리지 100%**를 목표로 한다. 못 미치면 사유를 분류해 리포트에 남긴다 | 3장 ⑦, 7.6, 12장 `[coverage]` |
-| 9 | 커널 빌드 환경 | QEMU, 빌드+실행 1회 약 8분. 빌드 횟수를 예산으로 관리하고 스모크 생략·사전검증 캐시·라운드 묶기로 횟수를 줄인다 | 7.7, 12장 `max_builds_per_function` |
+| 9 | 커널 빌드 환경 | QEMU, 빌드+실행 1회 약 8분. 빌드 횟수를 예산으로 관리하고 스모크 생략·사전검증 캐시·라운드 묶기로 횟수를 줄인다 | 7.7, 12장 `max_builds_per_file` |
 | 10 | gtest 대상 언어 | C 위주이나 C++도 있다. 자유 함수·static 멤버를 먼저, 인스턴스 멤버 함수는 12단계 | 6.3, 13장 12단계 |
 | 11 | 동시 실행 | 순차 실행. 병렬은 하지 않는다 | 11.1 |
 | 12 | 언어 | 리포트·뷰어·doctor 메시지·코드 주석 모두 한국어. 커밋 메시지는 CLAUDE.md에 따라 영어 | CLAUDE.md |
 | 13 | 여러 프로덕트 운영 | 공통 정보는 `$GENUT_HOME`, 프로덕트 정보는 `$GENUT_HOME/products/<이름>/`에 분리 저장. 프로덕트 소스 트리에는 테스트 파일 외에 아무것도 쓰지 않는다. 읽을 때 공통→프로덕트 순으로 겹치고, 쓸 때는 범위 규칙과 Note Keeper 검증으로 섞이지 않게 한다 | 1장 원칙, 5.2, 10.1, 11.5, 12장, 13장 1·13단계 |
 | 14 | 컨텍스트 한도 관리 | 모든 LLM 호출은 프롬프트 조립기를 거쳐 보내기 직전에 전체 토큰을 세고, 한도를 넘으면 우선순위가 낮은 조각부터 축약·생략한다. 필수 조각만으로도 넘치면 `context_overflow`로 호출하지 않는다. 토큰은 보수적으로 추정하고 `genut doctor`가 보정한다 | 7.3, 9.5, 9.7, 12장, 13장 2단계 |
+| 5 | 규칙 md 언어 | 규칙 md는 한국어로 쓴다. 역할 지시문은 영어 기본이며 `prompt_language`로 한국어 전환 가능. 혼용 효과는 eval로 비교한다 | 5.3, 9.5, 12장 `prompt_language` |
+| 15 | gtest 테스트 타깃 구성 | 대상 소스는 이미 사용자 빌드에 있다. GenUT는 사용자 타깃(`link_targets`)을 링크하는 테스트 실행 파일을 전용 빌드 디렉터리에서 커버리지·새니타이저 플래그로 빌드한다. 생성 파일과 CMakeLists.txt 위치는 사용자가 설정한다 | 6.4, 7.5, 7.6, 12장 `[gtest]` |
+| 16 | 파일 단위 처리 | 테스트 파일은 소스 파일당 하나이고, 여러 함수의 케이스를 한 빌드로 검증한다. 빌드·시간 예산은 파일 단위, 토큰·수정 예산은 함수 단위 | 3.3, 7.8, 11.1, 12장 |
+| 17 | 테스트 소스 출력 형식 | JSON 스키마를 기본으로 하고 펜스 블록 형식을 함께 구현해 eval로 비교한다 | 9.4, 12장 `code_format` |
+| 18 | KUnit 스크립트 모드 | 스크립트는 `--mode build\|run\|all`을 제공한다. 사전검증은 build, 격리 재실행은 run. `--filter`는 선택이며 없으면 파일 재작성으로 격리한다 | 7.7, 8.4, 12장 계약 |
+| 19 | 개발 중 데이터 정책 | 외부 API(Claude)로는 샘플·평가 코퍼스만 처리하고 실제 프로덕트 코드는 사내 Gemma 4로만 처리한다 | 9.1 |
