@@ -2,7 +2,7 @@
 
 > 이 문서는 GenUT(Generate Unit Tests)의 설계를 설명합니다. C 코드나 테스트 도구를 잘 모르는 사람도 흐름을 이해할 수 있도록 썼고, 구현자가 그대로 따라 만들 수 있을 만큼 구체적으로 적었습니다. 코드 구현은 이 문서를 함께 검토하고 합의한 뒤에 시작합니다.
 
-**문서 버전**: 0.1 (초안, 2026-10-22)
+**문서 버전**: 0.2 (초안, 2026-10-22)
 **상태**: 검토 중
 
 ---
@@ -723,7 +723,7 @@ class StubAdapter(Protocol):
 | 명령 | 하는 일 |
 |---|---|
 | `genut init` | 대화형으로 `genut.toml` 생성. compile DB·스크립트 경로를 탐지해 제안. `rules/` 기본 템플릿 복사 |
-| `genut doctor` | libclang, compile DB, 실행 스크립트, Provider 연결, 스키마 출력 지원, 샘플 preflight를 점검. 문제를 한국어로 설명하고 해결 방법 안내 |
+| `genut doctor` | libclang, compile DB, 실행 스크립트, Provider 연결, 스키마 출력 지원, 샘플 preflight를 점검. KUnit이면 `test_file` 경로가 커널 트리 안에 있고 같은 디렉터리 Makefile에 오브젝트가 등록되어 있는지, Kconfig 심볼이 `.config`에 켜져 있는지도 확인. 문제를 한국어로 설명하고 해결 방법 안내 |
 | `genut gen --file F [--func NAME] [--backend gtest\|kunit]` | 테스트 생성. 함수를 생략하면 파일의 모든 비static 함수 |
 | `genut show <run\|latest>` | 터미널 요약 |
 | `genut view <run\|latest>` | HTML 뷰어 생성 (단일 파일, 브라우저로 열기) |
@@ -830,7 +830,6 @@ flowchart LR
 backend = "gtest"                 # "gtest" | "kunit"
 rules_dir = "rules"
 runs_dir = ".genut/runs"
-output_dir = "tests/generated"    # 최종 테스트 파일 위치
 
 [llm]
 provider = "anthropic"            # "anthropic" | "openai_compat" | "fake"
@@ -865,12 +864,14 @@ compile_commands = "build/compile_commands.json"
 cmake_source_dir = "."
 cmake_build_dir = "build"
 gtest_root = ""                   # 비우면 find_package
+output_dir = "tests/generated"    # 최종 테스트 파일 위치 (CLI --out 으로 덮어쓰기)
 sanitizers = []                   # ["address", "undefined"]
 test_timeout_sec = 60
 
 [kunit]
 compile_commands = "/path/to/linux/compile_commands.json"
 kernel_src = "/path/to/linux"
+test_file = "drivers/foo/foo_test.c"        # 사용자가 Makefile/Kconfig에 미리 등록한 경로 (kernel_src 기준, CLI --out 으로 덮어쓰기)
 run_script = "scripts/kunit_build_run.sh"   # 계약: <test_file> [--filter suite.case] --log <path>
 vmlinux = ""                      # 비우면 심볼화 생략
 test_timeout_sec = 600
@@ -887,8 +888,9 @@ max_struct_fields = 30
 
 | 항목 | 내용 |
 |---|---|
+| 전제 | 테스트 파일 경로(`[kunit] test_file`)가 **GenUT 실행 전에** 사용자에 의해 해당 디렉터리의 Makefile과 Kconfig에 등록되어 있어야 한다. GenUT는 커널 트리의 빌드 설정을 수정하지 않으며, 그 경로에 테스트 파일을 쓰기만 한다 |
 | 호출 | `<script> <test_file> [--filter <suite>.<case>] --log <path>` |
-| 하는 일 | 테스트 파일을 커널 트리의 적절한 위치에 배치(또는 심볼릭 링크), Kconfig/Makefile 반영, 빌드, 실행 |
+| 하는 일 | 이미 등록된 테스트 파일을 포함해 커널(또는 모듈)을 빌드하고 실행 |
 | 종료 코드 | 0 = 실행 완료(테스트 결과는 로그로 판단), 10 = 빌드 실패, 20 = 실행 실패(부팅 불가 등), 그 외 = 스크립트 오류 |
 | 출력 | 전체 로그는 `--log` 파일에. stdout은 짧은 진행 메시지만 |
 | 빌드 실패 시 | 컴파일러 출력이 로그 파일에 그대로 포함되어야 함 (진단 파서가 읽음) |
@@ -934,11 +936,10 @@ max_struct_fields = 30
 
 ## 14. 열린 질문
 
-검토 중 결정이 필요한 항목입니다. 답이 정해지면 본문에 반영하고 이 목록에서 지웁니다.
+검토 중 결정이 필요한 항목입니다. 답이 정해지면 본문에 반영하고 아래 "결정된 항목"으로 옮깁니다. 번호는 유지합니다.
 
 | # | 질문 | 현재 가정 |
 |---|---|---|
-| 1 | **KUnit 테스트 파일 배치**: 생성된 `*_test.c`를 커널 트리 어디에 두고 Kconfig/Makefile 수정은 누가 하나? | 실행 스크립트가 담당. GenUT는 파일 경로만 넘김 |
 | 2 | **static 함수 접근**: `#include "xxx.c"` 방식과 `VISIBLE_IF_KUNIT`/`EXPORT_SYMBOL_IF_KUNIT` 중 선호? | `include_source` 기본, 설정으로 전환 |
 | 3 | **스텁 도구 md 시점**: 두 md가 언제 제공되나? 그 전까지 NoopStub으로 진행해도 되나? | 10단계 전까지 NoopStub |
 | 4 | **기존 테스트 파일**: 같은 함수의 테스트가 이미 있으면 병합? 새 파일? | 새 파일 (`_genut` 접미사), 병합은 후속 |
@@ -950,3 +951,9 @@ max_struct_fields = 30
 | 10 | **gtest 대상의 C++ 비율**: 순수 C 위주인가, 클래스/템플릿도 있나? | C 위주. C++ 클래스는 후속 |
 | 11 | **동시 실행**: 여러 함수를 병렬로 생성할 필요가 있나? 빌드 디렉터리 충돌 처리 필요 | 순차 실행. 병렬은 후속 |
 | 12 | **문서 언어**: 코드 주석과 리포트는 한국어? 영어? | 리포트·뷰어·doctor 메시지 한국어, 코드 주석·커밋 영어 |
+
+### 결정된 항목
+
+| # | 질문 | 결정 | 반영 위치 |
+|---|---|---|---|
+| 1 | KUnit 테스트 파일 배치와 Kconfig/Makefile 반영 | 테스트 파일 경로는 사용자가 설정(`[kunit] test_file`)으로 지정한다. Kconfig/Makefile 등록은 GenUT 실행 전에 사용자가 한다. GenUT는 커널 빌드 설정을 수정하지 않는다 | 11.1 doctor 점검, 12장 설정·스크립트 계약 |
