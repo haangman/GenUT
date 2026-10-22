@@ -113,6 +113,7 @@ class AgentEnv:
     home: Path | None = None
     trace: Trace | None = None
     budget: Budget | None = None
+    stage: str = ""  # 오케스트레이터가 바꾼다. 호출 기록에 남아 replay가 단계별로 응답을 고른다
 
 
 class AgentError(Exception):
@@ -188,6 +189,7 @@ class Agent(Generic[T]):
         max_repair = max(0, min(2, (built.limit - built.tokens) // (reserve + REPAIR_MESSAGE_TOKENS)))
         meta: dict[str, Any] = {
             "agent": self.role,
+            "stage": env.stage,
             "function": function,
             "tokens": built.tokens,
             "limit": built.limit,

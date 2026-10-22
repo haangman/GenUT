@@ -140,6 +140,102 @@ def show(run: Annotated[str, typer.Argument(help="실행 ID 또는 latest")] = "
     typer.echo(render_summary(path))
 
 
+# -------------------------------------------------------------------- gen
+@app.command()
+def gen(
+    file: Annotated[Path, typer.Option("--file", "-f", help="대상 소스 파일")],
+    func: Annotated[Optional[list[str]], typer.Option("--func", help="대상 함수 (여러 번 줄 수 있음. 생략하면 모든 비static 함수)")] = None,
+    backend: Annotated[Optional[str], typer.Option("--backend", help="gtest | kunit (생략하면 프로덕트 설정)")] = None,
+    out: Annotated[Optional[Path], typer.Option("--out", help="함수별 테스트 파일을 쓸 위치 (gtest output_dir 덮어쓰기)")] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="LLM·빌드 없이 각 단계 프롬프트만 만들어 기록")] = False,
+    stop_after: Annotated[Optional[str], typer.Option("--stop-after", help="이 단계 뒤에 멈춤: analyze|stub|preflight|smoke|expand|fix")] = None,
+    home: HomeOpt = None,
+    product: ProductOpt = None,
+    set_: SetOpt = None,
+) -> None:
+    """테스트를 생성한다. 테스트 파일은 함수별로, 빌드는 소스 파일 단위로 묶는다."""
+    from genut.orchestrator import STAGES, GenOptions, Orchestrator
+
+    if stop_after and stop_after not in STAGES:
+        _fail(f"--stop-after는 {', '.join(STAGES)} 중 하나여야 합니다.")
+    source = file.expanduser().resolve()
+    if not source.is_file():
+        _fail(f"파일이 없습니다: {source}")
+    overrides = list(set_ or [])
+    if backend:
+        overrides.append(f"product.backend={backend}")
+    if out:
+        overrides.append(f"gtest.output_dir={out.expanduser().resolve()}")
+    try:
+        ctx = make_context(_home(home), product, overrides=overrides, require_product=True)
+    except (ProductError, ValueError) as e:
+        _fail(str(e))
+    orch = Orchestrator(ctx, source, GenOptions(functions=list(func or []), dry_run=dry_run, stop_after=stop_after or ""), echo=typer.echo)
+    orch.run()
+    if orch.error:
+        raise typer.Exit(1)
+
+
+# --------------------------------------------------------------- finalize
+@app.command()
+def finalize(run: Annotated[str, typer.Argument(help="실행 ID 또는 latest")] = "latest", home: HomeOpt = None, product: ProductOpt = None) -> None:
+    """중단되었거나 미확인으로 남은 실행의 통과 케이스로 최종 확인만 다시 해서 설치한다 (LLM 호출 없음)."""
+    from genut.orchestrator import StopRun, finalize_run
+    from genut.trace import resolve_run
+
+    try:
+        ctx = make_context(_home(home), product, require_product=True)
+        finalize_run(ctx, resolve_run(ctx.runs_root, run), echo=typer.echo)
+    except (ProductError, FileNotFoundError, StopRun) as e:
+        _fail(str(e), 1)
+
+
+# ------------------------------------------------------------------- view
+@app.command()
+def view(
+    run: Annotated[str, typer.Argument(help="실행 ID 또는 latest")] = "latest",
+    open_: Annotated[bool, typer.Option("--open/--no-open", help="브라우저로 연다")] = True,
+    home: HomeOpt = None,
+    product: ProductOpt = None,
+) -> None:
+    """실행 하나를 단일 HTML 파일로 만든다."""
+    from genut.trace import resolve_run
+    from genut.viewer.render import write_view
+
+    try:
+        ctx = make_context(_home(home), product, require_product=True)
+        path = write_view(resolve_run(ctx.runs_root, run))
+    except (ProductError, FileNotFoundError) as e:
+        _fail(str(e))
+    typer.echo(f"뷰어: {path}")
+    if open_:
+        import webbrowser
+
+        webbrowser.open(path.as_uri())
+
+
+# ----------------------------------------------------------------- replay
+@app.command()
+def replay(
+    run: Annotated[str, typer.Argument(help="실행 ID 또는 latest")],
+    from_: Annotated[Optional[str], typer.Option("--from", help="이 단계부터는 실제 LLM을 부른다 (생략하면 기록된 응답만)")] = None,
+    home: HomeOpt = None,
+    product: ProductOpt = None,
+    set_: SetOpt = None,
+) -> None:
+    """기록된 LLM 응답을 재사용해 다시 실행한다. 분류 규칙·축약·예산을 바꾼 효과를 비용 없이 본다."""
+    from genut.replay import replay_run
+    from genut.trace import resolve_run
+
+    try:
+        ctx = make_context(_home(home), product, overrides=set_, require_product=True)
+        orch = replay_run(ctx, resolve_run(ctx.runs_root, run), from_ or "", echo=typer.echo)
+    except (ProductError, FileNotFoundError, ValueError) as e:
+        _fail(str(e))
+    if orch.error:
+        raise typer.Exit(1)
+
+
 def main() -> None:
     # Windows 콘솔에서 한국어가 깨지지 않게
     for stream in (sys.stdout, sys.stderr):

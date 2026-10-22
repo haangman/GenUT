@@ -78,6 +78,8 @@ class TestCase(BaseModel):
     previous_body: str | None = None
     helpers_used: list[str] = Field(default_factory=list)
     covers_lines: list[int] = Field(default_factory=list)
+    fix_evidence: str = ""  # Fixer가 기대값을 바꾼 근거 (실제값 베끼기 검사, 7.9)
+    shared_change_blocked: bool = False  # 이 케이스의 공유 영역 변경이 통과 케이스를 깨뜨려 되돌렸음 (7.4)
 
     def body_hash(self) -> str:
         return text_hash(self.body)

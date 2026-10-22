@@ -7,6 +7,7 @@ import pytest
 from conftest import SAMPLE
 from genut.agents.analyzer import Analyzer, AnalyzerOutput, judge_testability
 from genut.agents.base import AgentEnv, AgentError, core_section, fit, load_prompt
+from genut.agents.fixer import Fixer
 from genut.agents.test_writer import TestWriter, identifier
 from genut.analysis.compile_db import CompileDB
 from genut.analysis.extractor import analyze_file
@@ -94,14 +95,16 @@ def test_prompt_template_defaults_and_override(tmp_path):
 
 @pytest.mark.parametrize("language", ["en", "ko"])
 @pytest.mark.parametrize("backend", ["gtest", "kunit"])
-@pytest.mark.parametrize("agent", [Analyzer, TestWriter])
+@pytest.mark.parametrize("agent", [Analyzer, TestWriter, Fixer])
 def test_default_prompts_leave_no_placeholder(agent, backend, language):
     a = agent(_env(FakeProvider(), backend=backend, prompt_language=language))
-    values = a.values("rb_push", existing="test_rb_push_ok")
+    values = a.values("rb_push", existing="test_rb_push_ok", case="test_rb_push_full", category="assertion_failed", hint="h",
+                      allowed="fix_case", shared_rule="")
     for section in [None, *a.prompt.sections]:
         text = a.prompt.render(section, values)
         assert text and not re.search(r"\$\{?\w", text), (section, text)
-    assert "test_rb_push_<" in a.prompt.render(None, values)
+    if agent is not Fixer:
+        assert "test_rb_push_<" in a.prompt.render(None, values)
 
 
 def test_core_section_and_fit():

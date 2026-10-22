@@ -679,7 +679,7 @@ Reviewer 에이전트(⑧) 전에 코드가 다음을 검사합니다. LLM보다
 | 단정 없음 | 케이스 본문의 `EXPECT_*`/`ASSERT_*`/`KUNIT_EXPECT_*`/`KUNIT_ASSERT_*` 개수가 0 |
 | 항상 참인 단정 | `EXPECT_TRUE(true)`, 같은 식끼리 비교(`EXPECT_EQ(x, x)`), 상수끼리 비교 |
 | 금지 패턴 | 규칙 md의 "절대 금지"·"리뷰에서 거부할 패턴" 항목을 정규식으로 |
-| 실제값 베끼기 | Fixer가 기대값 리터럴을 **직전 실패의 실제값과 똑같은 값**으로 바꿨는지 diff와 실패 기록을 대조. 걸리면 Fixer에게 소스 반환 지점(6.3)을 근거로 정당화를 요구하고, 정당화가 없으면 `suspected_bug`로 전환 |
+| 실제값 베끼기 | Fixer가 기대값 리터럴을 **직전 실패의 실제값과 똑같은 값**으로 바꿨는지 diff와 실패 기록을 대조. 정당화는 Fixer 응답의 `evidence`(근거가 되는 소스 반환 지점의 줄 번호, 6.3)로 받는다. 걸렸는데 근거가 반환 지점을 가리키지 않으면 `suspected_bug`로 전환 |
 | 대상 함수 미호출 | 케이스 본문에 대상 함수 호출이 없음 |
 
 LLM Reviewer는 이 검사를 통과한 케이스에 대해 "의미 있는 단정인가", "규칙의 의도를 지켰는가"처럼 코드로 판단하기 어려운 것만 봅니다.
@@ -986,7 +986,7 @@ class StubAdapter(Protocol):
 | `genut view <run\|latest>` | HTML 뷰어 생성 (단일 파일, 브라우저로 열기) |
 | `genut diff <run1> <run2>` | 두 실행 비교 |
 | `genut replay <run> --from <stage>` | 기록된 LLM 응답을 재사용해 특정 단계부터 재실행 |
-| `genut finalize <run>` | 중단되었거나 "미확인"으로 남은 실행의 통과 케이스로 최종 확인만 다시 해서 설치 (LLM 호출 없음, 7.10) |
+| `genut finalize <run>` | 중단되었거나 "미확인"으로 남은 실행의 통과 케이스로 최종 확인만 다시 해서 설치 (LLM 호출 없음, 7.10). 빌드 설정은 지금 설정이 아니라 그 실행의 `run.json`에 기록된 설정(`--set` 포함)을 쓴다 |
 | `genut eval [--corpus PATH]` | 코퍼스 전체 성공률 측정, HTML 리포트 |
 | `genut product add\|list\|remove` | 프로덕트 등록 관리 (11.5) |
 | `genut knowledge list\|promote\|demote\|edit` | 축적 지식 관리 (11.5) |
@@ -1065,7 +1065,7 @@ flowchart LR
 
 | 도구 | 쓰임 |
 |---|---|
-| `genut replay <run> --from fix` | 기록된 LLM 응답을 캐시로 써서 LLM 비용 없이 특정 단계부터 재실행. 축약기 설정, 분류 규칙, 예산을 바꾼 효과를 바로 확인 |
+| `genut replay <run> --from fix` | 기록된 LLM 응답을 캐시로 써서 LLM 비용 없이 다시 실행. 응답은 역할별로 기록된 순서대로 돌려주고, `--from <단계>`를 주면 그 단계와 뒤 단계의 호출만 실제 LLM을 부른다(수정 호출은 스모크·확장 안에서 일어나도 fix 단계로 기록된다). 설정은 지금 것을 쓰므로 축약기 설정, 분류 규칙, 예산을 바꾼 효과를 바로 확인 |
 | `genut gen --dry-run` | LLM을 부르지 않고 각 단계 프롬프트만 만들어 `prompts/`에 기록. 프롬프트를 눈으로 검토 |
 | `genut gen --stop-after smoke` | 지정 단계 후 멈춤. 중간 산출물 검토 |
 | `genut gen --interactive` | 단계마다 멈추고 사람이 분석 보고서·스텁·후보를 편집한 뒤 계속 |

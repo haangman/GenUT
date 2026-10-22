@@ -1016,7 +1016,7 @@ memcpy         external          pr_err         external
 <tr><td>단정 없음</td><td>케이스 본문의 EXPECT_*/ASSERT_*/KUNIT_EXPECT_*/KUNIT_ASSERT_* 개수가 0</td></tr>
 <tr><td>항상 참인 단정</td><td><code>EXPECT_TRUE(true)</code>, 같은 식끼리 비교(<code>EXPECT_EQ(x, x)</code>), 상수끼리 비교</td></tr>
 <tr><td>금지 패턴</td><td>규칙 md의 "절대 금지"·"리뷰에서 거부할 패턴" 항목을 정규식으로</td></tr>
-<tr><td>실제값 베끼기</td><td>Fixer가 기대값 리터럴을 <b>직전 실패의 실제값과 똑같은 값</b>으로 바꿨는지 diff와 실패 기록을 대조. 걸리면 Fixer에게 소스 반환 지점(6.3)을 근거로 정당화를 요구하고, 정당화가 없으면 suspected_bug로 전환</td></tr>
+<tr><td>실제값 베끼기</td><td>Fixer가 기대값 리터럴을 <b>직전 실패의 실제값과 똑같은 값</b>으로 바꿨는지 diff와 실패 기록을 대조. 정당화는 Fixer 응답의 <code>evidence</code>(근거가 되는 소스 반환 지점의 줄 번호, 6.3)로 받는다. 걸렸는데 근거가 반환 지점을 가리키지 않으면 suspected_bug로 전환</td></tr>
 <tr><td>대상 함수 미호출</td><td>케이스 본문에 대상 함수 호출이 없음</td></tr>
 </table></div>
 <p>LLM Reviewer는 이 검사를 통과한 케이스에 대해 "의미 있는 단정인가", "규칙의 의도를 지켰는가"처럼 코드로 판단하기 어려운 것만 봅니다.</p>
@@ -1375,7 +1375,7 @@ max_context = 32768</code></pre>
 <tr><td><code>genut view &lt;run|latest&gt;</code></td><td>HTML 뷰어 생성 (단일 파일, 브라우저로 열기)</td></tr>
 <tr><td><code>genut diff &lt;run1&gt; &lt;run2&gt;</code></td><td>두 실행 비교</td></tr>
 <tr><td><code>genut replay &lt;run&gt; --from &lt;stage&gt;</code></td><td>기록된 LLM 응답을 재사용해 특정 단계부터 재실행</td></tr>
-<tr><td><code>genut finalize &lt;run&gt;</code></td><td>중단되었거나 "미확인"으로 남은 실행의 통과 케이스로 최종 확인만 다시 해서 설치 (LLM 호출 없음, 7.10)</td></tr>
+<tr><td><code>genut finalize &lt;run&gt;</code></td><td>중단되었거나 "미확인"으로 남은 실행의 통과 케이스로 최종 확인만 다시 해서 설치 (LLM 호출 없음, 7.10). 빌드 설정은 지금 설정이 아니라 그 실행의 <code>run.json</code>에 기록된 설정(<code>--set</code> 포함)을 쓴다</td></tr>
 <tr><td><code>genut eval [--corpus PATH]</code></td><td>코퍼스 전체 성공률 측정, HTML 리포트</td></tr>
 <tr><td><code>genut product add|list|remove</code></td><td>프로덕트 등록 관리 (11.5)</td></tr>
 <tr><td><code>genut knowledge list|promote|demote|edit</code></td><td>축적 지식 관리 (11.5)</td></tr>
@@ -1441,7 +1441,7 @@ max_context = 32768</code></pre>
 </div>
 <div class="tbl"><table>
 <tr><th>도구</th><th>쓰임</th></tr>
-<tr><td><code>genut replay &lt;run&gt; --from fix</code></td><td>기록된 LLM 응답을 캐시로 써서 LLM 비용 없이 특정 단계부터 재실행. 축약기 설정, 분류 규칙, 예산을 바꾼 효과를 바로 확인</td></tr>
+<tr><td><code>genut replay &lt;run&gt; --from fix</code></td><td>기록된 LLM 응답을 캐시로 써서 LLM 비용 없이 다시 실행. 응답은 역할별로 기록된 순서대로 돌려주고, <code>--from &lt;단계&gt;</code>를 주면 그 단계와 뒤 단계의 호출만 실제 LLM을 부른다(수정 호출은 스모크·확장 안에서 일어나도 fix 단계로 기록된다). 설정은 지금 것을 쓰므로 축약기 설정, 분류 규칙, 예산을 바꾼 효과를 바로 확인</td></tr>
 <tr><td><code>genut gen --dry-run</code></td><td>LLM을 부르지 않고 각 단계 프롬프트만 만들어 prompts/에 기록. 프롬프트를 눈으로 검토</td></tr>
 <tr><td><code>genut gen --stop-after smoke</code></td><td>지정 단계 후 멈춤. 중간 산출물 검토</td></tr>
 <tr><td><code>genut gen --interactive</code></td><td>단계마다 멈추고 사람이 분석 보고서·스텁·후보를 편집한 뒤 계속</td></tr>

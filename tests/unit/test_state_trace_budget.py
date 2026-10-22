@@ -104,3 +104,17 @@ def test_report_and_summary(tmp_path):
     st.save(tmp_path / "state.json")
     out = render_summary(tmp_path)
     assert "rb_push: partial" in out and "최종 확인 OK" in out
+
+
+def test_say_survives_console_encoding_errors(tmp_path):
+    shown = []
+
+    def cp949_console(text):
+        text.encode("cp949")  # ✓ 같은 문자는 cp949로 못 쓴다
+        shown.append(text)
+
+    tr = Trace(RunDir(tmp_path / "run"), echo=cp949_console)
+    tr.say("round 1: fix_case(test_a) ✓")
+    tr.close()
+    assert shown == ["round 1: fix_case(test_a) ?"]
+    assert "✓" in tr.rundir.trace_jsonl.read_text(encoding="utf-8")  # 기록에는 원문이 남는다

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -34,17 +35,19 @@ from genut.backends.gtest import skeleton
 from genut.backends.gtest.cmake_runner import (
     CMake,
     CMakeTarget,
+    compile_flags,
+    file_glob,
     link_closure,
     managed_cmakelists,
     parse_links,
     render_links,
     suggest_link_targets,
     target_name,
-    file_glob,
     unit_key,
 )
 from genut.config import GenutConfig
 from genut.models import CaseResult, CrashBrief, Diagnostic
+from genut.state import text_hash
 from genut.verify.diagnostics import attribute, parse_compiler_output
 from genut.verify.logs.crash import HYPOTHESES, CrashContext, build_brief
 from genut.verify.logs.gtest_json import parse_gtest_json, parse_gtest_stdout
@@ -130,6 +133,14 @@ class GTestBackend:
     def compile_db(self) -> CompileDB | None:
         p = self.build_dir / "compile_commands.json"
         return CompileDB.load(p) if p.exists() else None
+
+    def fingerprint(self) -> str:
+        """사전검증 캐시 열쇠의 환경 부분: 구성 결과(캐시·compile DB)와 GenUT 빌드 설정 (설계 7.7)."""
+        parts = [json.dumps(self.cfg.gtest.model_dump(), sort_keys=True), json.dumps(compile_flags(self.cfg)), json.dumps(self.links, sort_keys=True)]
+        for name in ("CMakeCache.txt", "compile_commands.json"):
+            p = self.build_dir / name
+            parts.append(p.read_text(encoding="utf-8", errors="replace") if p.exists() else "")
+        return text_hash("\n".join(parts))
 
     def link_context(self, unit: TestUnit) -> GTestLinkContext:
         """그 테스트가 링크하는 타깃(과 의존 타깃)의 소스로 linkable을 판정한다 (설계 6.4)."""

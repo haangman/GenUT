@@ -10,12 +10,15 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
+from genut.analysis.compile_db import CompileDB
 from genut.analysis.model import AnalysisReport
 from genut.backends.stub import StubArtifacts
 from genut.models import CaseResult, CrashBrief, Diagnostic
 from genut.state import LIVE, FunctionState, TestCase
 from genut.verify.diagnostics import LineMap
+from genut.verify.staged import CheckResult
 
 
 @dataclass
@@ -95,6 +98,32 @@ class BuildResult:
     seconds: float
     log_path: Path | None = None
     unattributed: list[Diagnostic] = field(default_factory=list)  # 어느 함수 것인지 모르는 진단
+
+
+class Backend(Protocol):
+    """오케스트레이터가 쓰는 백엔드 인터페이스. gtest와 KUnit이 구현한다."""
+
+    name: str
+
+    def configure(self, units: list[TestUnit]) -> CommandResult: ...
+
+    def compile_db(self) -> CompileDB | None: ...
+
+    def link_context(self, unit: TestUnit) -> object: ...
+
+    def fingerprint(self) -> str: ...
+
+    def render(self, unit: TestUnit, cases: list[TestCase] | None = None) -> Rendered: ...
+
+    def preflight(self, units: list[TestUnit], out_dir: Path | None = None) -> PreflightResult: ...
+
+    def check(self, r: Rendered) -> CheckResult: ...
+
+    def build(self, rendered: list[Rendered], out_dir: Path | None = None) -> BuildResult: ...
+
+    def run(self, r: Rendered, out_dir: Path | None = None, only: list[str] | None = None) -> RunResult: ...
+
+    def install(self, r: Rendered) -> Path: ...
 
 
 @dataclass

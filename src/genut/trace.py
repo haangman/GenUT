@@ -111,7 +111,10 @@ class Trace:
     def say(self, message: str) -> None:
         self.event("message", text=message)
         if self.echo:
-            self.echo(message)
+            try:
+                self.echo(message)
+            except UnicodeError:  # 콘솔 인코딩 문제로 실행이 멈추면 안 된다 (기록은 이미 남김)
+                self.echo(message.encode("ascii", "replace").decode("ascii"))
 
     @contextmanager
     def stage(self, name: str, **data: Any) -> Iterator[None]:

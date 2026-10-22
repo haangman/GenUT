@@ -74,7 +74,7 @@ def _analyzer_notes(fs: FunctionState, brief: bool) -> str:
     return "\n".join(lines)
 
 
-def _helpers(shared: SharedArea, signatures: bool) -> str:
+def helpers_text(shared: SharedArea, signatures: bool) -> str:
     if signatures:
         return "\n".join(code.split("{", 1)[0].strip() + ";" for code in shared.helpers.values())
     return "\n\n".join(shared.helpers.values())
@@ -113,8 +113,8 @@ class TestWriter(Agent[TestWriterOutput]):
             frags.append(Fragment("analyzer", _analyzer_notes(fs, False), SHRINKABLE, title="Analyzer 의견",
                                   shrinkers=[lambda: _analyzer_notes(fs, True)]))
         if fs.shared.helpers:
-            frags.append(Fragment("helpers", _helpers(fs.shared, False), SHRINKABLE, title="공유 헬퍼 (이미 있음. 다시 정의하지 말 것)",
-                                  shrinkers=[lambda: _helpers(fs.shared, True)]))
+            frags.append(Fragment("helpers", helpers_text(fs.shared, False), SHRINKABLE, title="공유 헬퍼 (이미 있음. 다시 정의하지 말 것)",
+                                  shrinkers=[lambda: helpers_text(fs.shared, True)]))
         passed = fs.passed()
         if passed:
             full = _passed(passed, True)
