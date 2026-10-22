@@ -21,9 +21,12 @@ class _M(BaseModel):
 # --------------------------------------------------------------------- LLM
 class AnthropicConfig(_M):
     api_key_env: str = "ANTHROPIC_API_KEY"
-    base_url: str = "https://api.anthropic.com"
-    max_context: int = 200_000
-    timeout_sec: float = 300.0
+    base_url: str = ""  # 비우면 SDK 기본값
+    max_context: int = 1_000_000
+    max_output_tokens: int = 16_000  # 생각(thinking) 토큰도 여기에 포함된다
+    effort: str = "medium"  # output_config.effort: low | medium | high | xhigh | max
+    fallbacks: str = "default"  # 거절 시 서버 측 대체 모델. "" 이면 끔
+    timeout_sec: float = 600.0
 
 
 class OpenAICompatConfig(_M):
@@ -49,8 +52,8 @@ class ContextConfig(_M):
 
 class LLMConfig(_M):
     provider: Literal["anthropic", "openai_compat", "fake"] = "anthropic"
-    model: str = "claude-sonnet-5-5"
-    temperature: float = 0.2
+    model: str = "claude-opus-5-5"  # anthropic provider의 모델
+    temperature: float = 0.2  # openai_compat에만 보낸다 (Claude API는 샘플링 인자를 받지 않음)
     prompt_language: Literal["en", "ko"] = "en"
     code_format: Literal["json", "fenced"] = "json"
     max_retries: int = 4

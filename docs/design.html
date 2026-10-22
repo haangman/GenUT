@@ -1603,14 +1603,16 @@ $GENUT_HOME/products/&lt;이름&gt;/
 <pre><code># $GENUT_HOME/config.toml — 모든 프로덕트 공통 (기본 ~/.genut/)
 [llm]
 provider = "anthropic"            # "anthropic" | "openai_compat" | "fake"
-model = "claude-sonnet-5-5"
-temperature = 0.2
+model = "claude-opus-5-5"         # anthropic provider 모델
+temperature = 0.2                 # openai_compat에만 적용. Claude API는 2026-10-21부터 샘플링 인자를 받지 않음
 prompt_language = "en"            # 역할 지시문 언어 ("en" | "ko"). 규칙 md는 한국어 그대로 삽입
 code_format = "json"             # 테스트 소스 출력 형식 "json" | "fenced" (9.4)
 max_retries = 4                   # 전송 오류 재시도 횟수 (9.4)
 
 [llm.anthropic]
 api_key_env = "ANTHROPIC_API_KEY"
+effort = "medium"                 # output_config.effort
+fallbacks = "default"             # 거절 시 서버 측 대체 모델. "" 이면 끔
 
 [llm.openai_compat]
 base_url = "http://gemma4.internal/v1"
