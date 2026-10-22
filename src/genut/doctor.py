@@ -79,7 +79,9 @@ def _gtest_checks(ctx: AppContext, root: Path) -> list[Check]:
             )
         )
     cov = ctx.config.coverage
-    if cov.enabled:
+    if not cov.enabled:
+        out.append(_coverage_off())
+    else:
         tools = ["gcov"] if cov.tool == "gcov" else ["llvm-profdata", "llvm-cov"]
         missing = [t for t in tools if not shutil.which(t)]
         out.append(
@@ -105,6 +107,10 @@ def _gtest_checks(ctx: AppContext, root: Path) -> list[Check]:
             )
     out.append(Check("ok", "생성 위치", f"CMakeLists: {lists_dir} · 테스트: {(root / g.output_dir).resolve()}"))
     return out
+
+
+def _coverage_off() -> Check:
+    return Check("ok", "커버리지", "꺼짐 (선택 기능). 켜려면 genut gen --coverage 또는 [coverage] enabled = true")
 
 
 def _kunit_checks(ctx: AppContext) -> list[Check]:
@@ -155,7 +161,9 @@ def _kunit_checks(ctx: AppContext) -> list[Check]:
                 for sym, why in (("CONFIG_KASAN", "메모리 오류 원인이 로그에 남음"), ("CONFIG_DEBUG_INFO", "호출 스택을 file:line으로 복원")):
                     if f"{sym}=y" not in text:
                         out.append(Check("warn", sym, f"{sym}가 꺼져 있습니다 ({why}).", f"{sym}=y 를 권장합니다 (설계 8.5)."))
-                if ctx.config.coverage.enabled and "CONFIG_GCOV_KERNEL=y" not in text:
+                if not ctx.config.coverage.enabled:
+                    out.append(_coverage_off())
+                elif "CONFIG_GCOV_KERNEL=y" not in text:
                     out.append(Check("warn", "CONFIG_GCOV_KERNEL", "커널 커버리지가 꺼져 있어 라인 커버리지를 잴 수 없습니다.", "CONFIG_GCOV_KERNEL=y 와 GCOV_PROFILE_<obj> := y 를 설정하세요."))
     if not k.test_dir:
         out.append(Check("warn", "test_dir", "함수별 테스트 파일 위치가 비어 있어 집합 파일과 같은 디렉터리를 씁니다."))

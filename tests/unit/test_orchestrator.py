@@ -323,10 +323,21 @@ COV_SMOKE = cases(("test_rb_push_ok", OK + " // COVERS=30,32,36,37,39,40,41,42")
 COV_EXPAND = cases(("test_rb_push_null", NULL + " // COVERS=30,31"))
 
 
+def test_coverage_is_optional_and_off_by_default(world):
+    world.be.executable_lines, world.be.entry_lines = LINES, {26}
+    st, orch, p = run(world, {"test_writer": [COV_SMOKE, COV_EXPAND]})
+    fs = st.functions["rb_push"]
+    said = [e["text"] for e in events(orch, "message")]
+    assert "[7/8] 커버리지   꺼짐 (켜려면 --coverage 또는 [coverage] enabled = true)" in said
+    assert fs.coverage is None and fs.result == "complete" and "test_writer" in [c["tag"] for c in p.calls]
+    assert not list(orch.rundir.path.glob("coverage/*")) and not [e for e in events(orch, "coverage")]  # 재지도 않는다
+    assert all("## 미커버" not in c["messages"][1].content for c in p.calls if c["tag"] == "test_writer")
+
+
 def test_coverage_round_reaches_target(world):
     world.be.executable_lines, world.be.entry_lines = LINES, {26}
     more = cases(("test_rb_push_full", FULL_OK + " // COVERS=32,33,34"), ("test_rb_push_nomem", OK + " // COVERS=36,37,38"))
-    st, orch, p = run(world, {"test_writer": [COV_SMOKE, COV_EXPAND, more]})
+    st, orch, p = run(world, {"test_writer": [COV_SMOKE, COV_EXPAND, more]}, overrides=["coverage.enabled=true"])
     fs = st.functions["rb_push"]
     assert fs.coverage.percent == 100.0 and fs.result == "complete" and fs.unreachable == []
     full = fs.case("test_rb_push_full")
@@ -343,7 +354,7 @@ def test_remaining_uncovered_lines_are_classified(world):
     st, orch, p = run(world, {
         "test_writer": [COV_SMOKE, COV_EXPAND, cases(("test_rb_push_full", FULL_OK + " // COVERS=32,33,34"))],
         "unreachable": [{"lines": [{"line": 38, "category": "needs_stub_behavior", "reason": "rb_alloc_slot이 NULL을 돌려줘야 한다"}]}],
-    }, overrides=["budget.max_coverage_rounds=1"])
+    }, overrides=["budget.max_coverage_rounds=1", "coverage.enabled=true"])
     fs = st.functions["rb_push"]
     assert fs.coverage.uncovered_lines == [38] and fs.result == "partial"
     assert [(u.line, u.category) for u in fs.unreachable] == [(38, "needs_stub_behavior")]

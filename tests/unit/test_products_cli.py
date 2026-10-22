@@ -100,11 +100,20 @@ def test_doctor_checks_coverage_tools(tmp_path, monkeypatch):
     src.mkdir()
     add_product(tmp_path / "h", "g", src)
     monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
-    ctx = make_context(tmp_path / "h", "g", overrides=["coverage.tool=llvm-cov"])
+    ctx = make_context(tmp_path / "h", "g", overrides=["coverage.tool=llvm-cov", "coverage.enabled=true"])
     cov = next(c for c in collect_checks(ctx) if c.title == "커버리지 도구")
     assert cov.status == "warn" and "llvm-profdata, llvm-cov" in cov.detail
     monkeypatch.setattr(doctor.shutil, "which", lambda name: f"/usr/bin/{name}")
-    cov = next(c for c in collect_checks(make_context(tmp_path / "h", "g")) if c.title == "커버리지 도구")
+    cov = next(c for c in collect_checks(make_context(tmp_path / "h", "g", overrides=["coverage.enabled=true"])) if c.title == "커버리지 도구")
     assert cov.status == "ok" and cov.detail == "/usr/bin/gcov"
-    off = make_context(tmp_path / "h", "g", overrides=["coverage.enabled=false"])
-    assert not [c for c in collect_checks(off) if c.title == "커버리지 도구"]
+    off = collect_checks(make_context(tmp_path / "h", "g"))  # 기본은 꺼짐: 도구를 찾지 않고 켜는 방법을 알려 준다
+    assert not [c for c in off if c.title == "커버리지 도구"]
+    assert next(c for c in off if c.title == "커버리지").detail.startswith("꺼짐 (선택 기능). 켜려면 genut gen --coverage")
+
+
+def test_coverage_cli_option():
+    from genut.cli import _with_coverage
+
+    assert _with_coverage(["budget.candidates=3"], True) == ["budget.candidates=3", "coverage.enabled=true"]
+    assert _with_coverage(None, False) == ["coverage.enabled=false"]
+    assert _with_coverage(["x.y=1"], None) == ["x.y=1"]  # 옵션을 안 주면 설정 파일을 따른다

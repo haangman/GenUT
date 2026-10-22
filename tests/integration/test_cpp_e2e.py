@@ -49,7 +49,7 @@ def test_cpp_members_end_to_end(tmp_path):
     ensure_home_layout(home)
     add_product(home, "cpp", root, "gtest")
     funcs = ["Counter::add", "Counter::valid_limit", "add_clamped", "Counter::check"]
-    st = Orchestrator(make_context(home, "cpp"), root / "src" / "counter.cpp", GenOptions(functions=funcs), provider=FakeProvider(responder=responder)).run()
+    st = Orchestrator(make_context(home, "cpp", overrides=["coverage.enabled=true"]), root / "src" / "counter.cpp", GenOptions(functions=funcs), provider=FakeProvider(responder=responder)).run()
 
     add = st.functions["Counter_add"]
     assert (add.result, add.final_check, add.coverage.percent) == ("complete", "ok", 100.0)

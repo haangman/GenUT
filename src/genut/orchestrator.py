@@ -350,7 +350,7 @@ class Orchestrator:
         """미커버 줄 → 도달 조건 → 케이스 추가를 목표에 닿거나 라운드가 끝날 때까지 (설계 7.6)."""
         cov = self.cfg.coverage
         if not cov.enabled or self.opts.dry_run:
-            self._say("coverage", "꺼짐" if not cov.enabled else "dry-run이라 측정하지 않음")
+            self._say("coverage", "꺼짐 (켜려면 --coverage 또는 [coverage] enabled = true)" if not cov.enabled else "dry-run이라 측정하지 않음")
             return
         rounds = self.cfg.budget.max_coverage_rounds
         for rnd in range(rounds + 1):

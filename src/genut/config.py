@@ -84,7 +84,7 @@ class BudgetConfig(_M):
 
 
 class CoverageConfig(_M):
-    enabled: bool = True
+    enabled: bool = False  # 라인 커버리지 측정과 보강(⑦). 선택 기능: genut gen --coverage 또는 true로 켠다 (설계 7.6)
     target_line_percent: float = 100.0
     tool: Literal["gcov", "llvm-cov"] = "gcov"
 

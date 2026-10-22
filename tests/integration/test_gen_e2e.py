@@ -45,11 +45,10 @@ def test_gen_end_to_end(tmp_path):
         "fixer": [_fix(FULL.format("RB_ENOSPC"), ":34 RB_ENOSPC"), _fix(NULL.replace("NULL", "NULL ")), _fix(NULL + "\n// 다시")],
     }), encoding="utf-8")
     base = ["--home", str(home), "--product", "sample"]
-    sets = ["--set", "llm.provider=fake", "--set", f"llm.fake.script={script}", "--set", "gtest.link_targets=[rb,rbslot]",
-            "--set", "coverage.enabled=false"]  # 수정 루프만 본다. 커버리지는 아래 테스트
+    sets = ["--set", "llm.provider=fake", "--set", f"llm.fake.script={script}", "--set", "gtest.link_targets=[rb,rbslot]"]  # 커버리지는 기본 꺼짐
     r = cli.invoke(app, ["gen", "--file", str(root / "src" / "ring_buffer.c"), "--func", "rb_push", *base, *sets])
     assert r.exit_code == 0, r.output
-    assert "[3/8] 사전검증" in r.output and "[6/8] 수정" in r.output
+    assert "[3/8] 사전검증" in r.output and "[6/8] 수정" in r.output and "[7/8] 커버리지   꺼짐" in r.output
 
     run = sorted((home / "products" / "sample" / "runs").iterdir())[-1]
     st = RunState.load(run / "state.json")
@@ -91,7 +90,7 @@ def test_gen_reaches_full_line_coverage(tmp_path):
         "test_writer": [_cases(("test_rb_push_ok", OK)), _cases(("test_rb_push_null", NULL)),
                         _cases(("test_rb_push_full", full), ("test_rb_push_nomem", nomem))],
     }), encoding="utf-8")
-    r = cli.invoke(app, ["gen", "--file", str(root / "src" / "ring_buffer.c"), "--func", "rb_push", "--home", str(home), "--product", "sample",
+    r = cli.invoke(app, ["gen", "--file", str(root / "src" / "ring_buffer.c"), "--func", "rb_push", "--coverage", "--home", str(home), "--product", "sample",
                          "--set", "llm.provider=fake", "--set", f"llm.fake.script={script}", "--set", "gtest.link_targets=[rb,rbslot]"])
     assert r.exit_code == 0, r.output
     assert "[7/8] 커버리지" in r.output and "미커버 :33 :34 :38" in r.output

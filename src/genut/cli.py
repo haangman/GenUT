@@ -23,6 +23,15 @@ app.add_typer(knowledge_app, name="knowledge")
 HomeOpt = Annotated[Optional[Path], typer.Option("--home", help="GENUT_HOME 대신 쓸 경로")]
 ProductOpt = Annotated[Optional[str], typer.Option("--product", "-p", help="프로덕트 이름 (생략하면 현재 디렉터리로 탐지)")]
 SetOpt = Annotated[Optional[list[str]], typer.Option("--set", help="설정 덮어쓰기. 예: --set budget.candidates=3")]
+CoverageOpt = Annotated[Optional[bool], typer.Option("--coverage/--no-coverage",
+                                                     help="라인 커버리지 측정·보강(⑦)을 켜거나 끈다. 생략하면 [coverage] enabled (기본 꺼짐)")]
+
+
+def _with_coverage(overrides: list[str] | None, coverage: bool | None) -> list[str]:
+    out = list(overrides or [])
+    if coverage is not None:
+        out.append(f"coverage.enabled={'true' if coverage else 'false'}")
+    return out
 
 
 def _fail(msg: str, code: int = 2) -> None:
@@ -264,7 +273,8 @@ def gen(
     backend: Annotated[Optional[str], typer.Option("--backend", help="gtest | kunit (생략하면 프로덕트 설정)")] = None,
     out: Annotated[Optional[Path], typer.Option("--out", help="함수별 테스트 파일을 쓸 위치 (gtest output_dir 덮어쓰기)")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="LLM·빌드 없이 각 단계 프롬프트만 만들어 기록")] = False,
-    stop_after: Annotated[Optional[str], typer.Option("--stop-after", help="이 단계 뒤에 멈춤: analyze|stub|preflight|smoke|expand|fix")] = None,
+    stop_after: Annotated[Optional[str], typer.Option("--stop-after", help="이 단계 뒤에 멈춤: analyze|stub|preflight|smoke|expand|fix|coverage|review")] = None,
+    coverage: CoverageOpt = None,
     home: HomeOpt = None,
     product: ProductOpt = None,
     set_: SetOpt = None,
@@ -277,7 +287,7 @@ def gen(
     source = file.expanduser().resolve()
     if not source.is_file():
         _fail(f"파일이 없습니다: {source}")
-    overrides = list(set_ or [])
+    overrides = _with_coverage(set_, coverage)
     if backend:
         overrides.append(f"product.backend={backend}")
     if out:
@@ -360,6 +370,7 @@ def diff(
 def replay(
     run: Annotated[str, typer.Argument(help="실행 ID 또는 latest")],
     from_: Annotated[Optional[str], typer.Option("--from", help="이 단계부터는 실제 LLM을 부른다 (생략하면 기록된 응답만)")] = None,
+    coverage: CoverageOpt = None,
     home: HomeOpt = None,
     product: ProductOpt = None,
     set_: SetOpt = None,
@@ -369,7 +380,7 @@ def replay(
     from genut.trace import resolve_run
 
     try:
-        ctx = make_context(_home(home), product, overrides=set_, require_product=True)
+        ctx = make_context(_home(home), product, overrides=_with_coverage(set_, coverage), require_product=True)
         orch = replay_run(ctx, resolve_run(ctx.runs_root, run), from_ or "", echo=typer.echo)
     except (ProductError, FileNotFoundError, ValueError) as e:
         _fail(str(e))
@@ -385,6 +396,7 @@ def eval_(
     save_baseline: Annotated[bool, typer.Option("--save-baseline", help="이번 결과를 이 모델의 기준치로 저장")] = False,
     compare_to: Annotated[Optional[Path], typer.Option("--compare", help="비교할 results.json (생략하면 이 모델의 기준치)")] = None,
     open_: Annotated[bool, typer.Option("--open/--no-open", help="HTML 리포트를 브라우저로 연다")] = False,
+    coverage: CoverageOpt = None,
     home: HomeOpt = None,
     product: ProductOpt = None,
     set_: SetOpt = None,
@@ -394,7 +406,7 @@ def eval_(
     from genut.evaluation import save_baseline as store_baseline
 
     try:
-        ctx = make_context(_home(home), product, overrides=set_, require_product=True)
+        ctx = make_context(_home(home), product, overrides=_with_coverage(set_, coverage), require_product=True)
     except (ProductError, ValueError) as e:
         _fail(str(e))
     path = (corpus or corpus_path(ctx)).expanduser()

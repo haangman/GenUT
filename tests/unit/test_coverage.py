@@ -132,7 +132,7 @@ def _gtest(tmp_path, tool, runner_kw):
     (root / "src").mkdir(parents=True)
     src = root / "src" / "ring_buffer.c"
     src.write_text("int x;\n")
-    cfg = GenutConfig.model_validate({"coverage": {"tool": tool}})
+    cfg = GenutConfig.model_validate({"coverage": {"tool": tool, "enabled": True}})
     runner = CovRunner(root / "build-genut", **runner_kw)
     be = GTestBackend(cfg, root, runner=runner)
     obj = be.build_dir / "CMakeFiles" / "rb.dir" / "src"

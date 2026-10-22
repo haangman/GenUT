@@ -404,7 +404,7 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기</code><
   <div class="connector"></div>
   <div class="stage"><div class="num">6</div><div class="body"><b>수정</b><span class="who">코드 분류 + Fixer 에이전트 + 코드 검증</span><div>실패 케이스마다 코드가 실패를 분류 → Fixer가 정해진 전략 중 하나 선택 → 그 케이스만 재작성 → 재검증</div><div class="fail"><b>한도 초과:</b> 케이스당 수정 2회를 넘기면 그 케이스 제거. 전체 4라운드를 넘기면 남은 실패 케이스 모두 제거. 사유는 리포트에. 어느 경우에도 이미 통과한 케이스는 유지(7.10)</div></div></div>
   <div class="connector"></div>
-  <div class="stage"><div class="num">7</div><div class="body"><b>커버리지</b><span class="who">코드 수집·조건 추출 + Test Writer + Analyzer</span><div>통과 케이스로 실행한 결과에서 대상 함수의 미커버 줄을 뽑고, 줄마다 도달 조건(가장 가까운 분기의 조건식과 방향)을 붙여 그 줄을 실행시키는 케이스를 요청. 목표는 라인 커버리지 100% (7.6)</div><div class="fail"><b>실패:</b> 새 케이스가 실패하면 수정 루프로. 라운드(기본 3)를 넘기면 남은 미커버 줄을 "도달 불가 사유"와 함께 리포트에 남김</div></div></div>
+  <div class="stage"><div class="num">7</div><div class="body"><b>커버리지</b><span class="who">코드 수집·조건 추출 + Test Writer + Analyzer</span><div>선택 기능(기본 꺼짐, <code>--coverage</code>로 켬). 통과 케이스로 실행한 결과에서 대상 함수의 미커버 줄을 뽑고, 줄마다 도달 조건(가장 가까운 분기의 조건식과 방향)을 붙여 그 줄을 실행시키는 케이스를 요청. 목표는 라인 커버리지 100% (7.6)</div><div class="fail"><b>실패:</b> 새 케이스가 실패하면 수정 루프로. 라운드(기본 3)를 넘기면 남은 미커버 줄을 "도달 불가 사유"와 함께 리포트에 남김</div></div></div>
   <div class="connector"></div>
   <div class="stage"><div class="num">8</div><div class="body"><b>리뷰</b><span class="who">코드의 결정적 검사(7.9) + Reviewer 에이전트</span><div>단정 없음·항상 참·금지 패턴·실제값 베끼기는 코드가 즉시 검사(7.9). Reviewer는 규칙 준수, "항상 참인 단정" 같은 무의미한 테스트, 수정 과정에서 단정을 무력화해 억지로 통과시킨 흔적, 커버리지용 케이스가 단정 없이 줄만 밟는지 검사</div><div class="fail"><b>지적:</b> 해당 케이스를 1회 수정하거나 제거. 수정은 빌드 예산 안에서만, 제거로 커버리지가 떨어지면 리포트에 재계산</div></div></div>
   <div class="connector"></div>
@@ -918,7 +918,7 @@ memcpy         external          pr_err         external
 </table></div>
 
 <h3>7.6 라인 커버리지 100% 목표</h3>
-<p>목표는 대상 함수의 <b>라인 커버리지 100%</b>입니다. 빌드가 비싸므로 커버리지는 별도 실행 없이 <b>모든 실행에서 함께 수집</b>합니다.</p>
+<p>커버리지 측정과 보강은 <b>선택 기능</b>입니다. 기본은 꺼져 있고 <code>genut gen --coverage</code>(실행 한 번) 또는 <code>[coverage] enabled = true</code>(항상)로 켭니다. 끄면 이 단계, 계측 빌드 플래그, 최종 재측정을 모두 건너뛰고 <code>complete</code>는 "제거된 케이스 없이 모두 통과"만 뜻합니다. 켜면 목표는 대상 함수의 <b>라인 커버리지 100%</b>이고, 빌드가 비싸므로 별도 실행 없이 <b>검증 실행마다 함께 수집</b>합니다.</p>
 <div class="tbl"><table>
 <tr><th></th><th>gtest</th><th>KUnit</th></tr>
 <tr><td>수집 방법</td><td>GenUT 전용 빌드 디렉터리(7.5)를 <code>--coverage</code>(gcc) 또는 <code>-fprofile-instr-generate -fcoverage-mapping</code>(clang)으로 구성해 대상 소스까지 계측. 측정은 빌드 없이 <b>통과 케이스만</b> <code>--gtest_filter</code>로 한 번 더 실행해서 한다(실패 케이스가 밟은 줄은 세지 않음). gcov는 이전 .gcda를 지우고 실행한 뒤 <code>gcov --json-format</code>을, llvm-cov는 profraw를 합쳐 <code>llvm-cov export -format=lcov</code>를 읽고, 실행 기록에 lcov 형식으로도 남긴다. gcov는 컴파일러와 같은 디렉터리·접두어의 것을 쓴다(버전이 맞아야 함)</td><td>커널에 <code>CONFIG_GCOV_KERNEL=y</code>, 대상 파일에 <code>GCOV_PROFILE_&lt;obj&gt; := y</code> (사용자가 준비). 실행 스크립트가 게스트의 <code>/sys/kernel/debug/gcov</code>에서 데이터를 꺼내 lcov 형식 coverage.info로 <code>--coverage-out</code>에 저장</td></tr>
@@ -1027,7 +1027,7 @@ memcpy         external          pr_err         external
 <ul>
   <li>결과는 "모두 통과"가 아니라 "통과한 케이스의 집합"이다. 함수별 결과는 셋 중 하나다.
     <ul>
-      <li><code>complete</code>: 커버리지 목표를 달성했고, 실패로 제거된 케이스가 없다(소스 버그 의심 제외).</li>
+      <li><code>complete</code>: 실패로 제거된 케이스가 없고(소스 버그 의심 제외), 커버리지를 켰다면 목표도 달성했다.</li>
       <li><code>partial</code>: 통과 케이스가 1개 이상이지만 실패·제거·미실행 케이스가 있다. <b>이것도 성공한 실행이며 테스트 파일이 만들어진다.</b></li>
       <li><code>none</code>: 통과 케이스가 없다.</li>
     </ul>
@@ -1371,7 +1371,7 @@ max_context = 32768</code></pre>
 <tr><th>명령</th><th>하는 일</th></tr>
 <tr><td><code>genut init</code></td><td>대화형으로 config.toml과 product.toml 생성. compile DB·스크립트 경로를 탐지해 제안. rules/ 기본 템플릿 복사</td></tr>
 <tr><td><code>genut doctor</code></td><td>libclang, compile DB, 실행 스크립트, Provider 연결, 스키마 출력 지원, 커버리지 도구(gcov/llvm-cov), 샘플 preflight를 점검. KUnit이면 <code>test_file</code>(집합 파일) 경로가 커널 트리 안에 있고 같은 디렉터리 Makefile에 오브젝트가 등록되어 있는지, Kconfig 심볼과 CONFIG_GCOV_KERNEL이 .config에 켜져 있는지, 대상 파일에 GCOV_PROFILE이 설정되어 있는지도 확인. 문제를 한국어로 설명하고 해결 방법 안내</td></tr>
-<tr><td><code>genut gen --file F [--func NAME] [--backend gtest|kunit] [--out PATH]</code></td><td>테스트 생성. 함수를 생략하면 파일의 모든 비static 함수가 대상이다. 테스트 파일은 함수별로 하나씩 만들고 빌드는 소스 파일 단위로 묶는다(7.8). 일부 케이스만 통과해도 통과분으로 파일을 만든다(7.10). 실행 간·프로덕트 간은 순차 처리. 대상 함수의 파일만 새로 쓰며 다른 함수의 파일과 병합하지 않는다</td></tr>
+<tr><td><code>genut gen --file F [--func NAME] [--backend gtest|kunit] [--out PATH] [--coverage]</code></td><td>테스트 생성. <code>--coverage</code>면 라인 커버리지 측정·보강(⑦)도 한다(기본 꺼짐). 함수를 생략하면 파일의 모든 비static 함수가 대상이다. 테스트 파일은 함수별로 하나씩 만들고 빌드는 소스 파일 단위로 묶는다(7.8). 일부 케이스만 통과해도 통과분으로 파일을 만든다(7.10). 실행 간·프로덕트 간은 순차 처리. 대상 함수의 파일만 새로 쓰며 다른 함수의 파일과 병합하지 않는다</td></tr>
 <tr><td><code>genut show &lt;run|latest&gt;</code></td><td>터미널 요약. latest는 현재 프로덕트의 최신 실행</td></tr>
 <tr><td><code>genut view &lt;run|latest&gt;</code></td><td>HTML 뷰어 생성 (단일 파일, 브라우저로 열기)</td></tr>
 <tr><td><code>genut diff [&lt;run1&gt; [&lt;run2&gt;]] [--json]</code></td><td>두 실행 비교. 생략하면 <code>latest~1</code>과 <code>latest</code>. <b>바뀐 입력</b>(설정 키별 변경, 규칙 md 해시, 역할 프롬프트 해시, provider·모델, 대상 함수 본문 해시)과 <b>바뀐 결과</b>(함수 결과·커버리지·최종 확인, 케이스 상태와 상태 경로 <code>new → fail → pass</code>, 빌드·토큰·소요 시간, 역할별 LLM 호출 수, 수정한 실패 분류 분포)를 나란히 보여 준다. replay 관계면 함께 표시. 실행 기록만 읽는다</td></tr>
@@ -1661,7 +1661,7 @@ passed_cases_token_budget = 4000  # 통과 케이스 소스 상한. 넘으면 �
 fix_examples_token_budget = 1500  # 과거 수정 사례 상한
 
 [coverage]
-enabled = true
+enabled = false                   # 선택 기능. 실행 한 번만 켜려면 genut gen --coverage (gen·replay·eval 공통)
 target_line_percent = 100
 tool = "gcov"                     # "gcov" | "llvm-cov" (gtest 전용. KUnit은 스크립트가 lcov 형식으로 제공)
 

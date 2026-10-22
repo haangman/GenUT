@@ -107,9 +107,10 @@ def test_managed_cmakelists():
 
 
 def test_compile_flags():
-    cfg = GenutConfig()
+    assert compile_flags(GenutConfig()) == (["-O0", "-g"], [])  # 커버리지는 선택 기능: 기본은 계측하지 않는다
+    cfg = GenutConfig.model_validate({"coverage": {"enabled": True}})
     assert compile_flags(cfg) == (["-O0", "-g", "--coverage"], ["--coverage"])
-    cfg = GenutConfig.model_validate({"coverage": {"tool": "llvm-cov"}, "gtest": {"sanitizers": ["address", "undefined"], "coverage_opt_level": ""}})
+    cfg = GenutConfig.model_validate({"coverage": {"tool": "llvm-cov", "enabled": True}, "gtest": {"sanitizers": ["address", "undefined"], "coverage_opt_level": ""}})
     comp, link = compile_flags(cfg)
     assert comp == ["-fprofile-instr-generate", "-fcoverage-mapping", "-fsanitize=address,undefined",
                     "-fno-sanitize-recover=address,undefined", "-fno-omit-frame-pointer"]

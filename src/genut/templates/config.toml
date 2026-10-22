@@ -36,7 +36,7 @@ token_counter = "estimate"
 # max_coverage_rounds = 3
 
 [coverage]
-enabled = true
+enabled = false                   # 라인 커버리지 측정·보강(⑦ 단계). 선택 기능: 실행 한 번만 켜려면 genut gen --coverage
 target_line_percent = 100
 
 [knowledge]

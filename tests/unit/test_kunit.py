@@ -108,8 +108,8 @@ def kern(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_KUNIT_CALLS", str(calls))
 
     def make(**kunit):
-        cfg = GenutConfig.model_validate({"product": {"backend": "kunit"}, "kunit": {"test_file": "drivers/foo/foo_kunit.c", "test_dir": "drivers/foo/tests",
-                                                                                     "run_script": str(FAKE), **kunit}})
+        cfg = GenutConfig.model_validate({"product": {"backend": "kunit"}, "coverage": {"enabled": True},
+                                          "kunit": {"test_file": "drivers/foo/foo_kunit.c", "test_dir": "drivers/foo/tests", "run_script": str(FAKE), **kunit}})
         return KUnitBackend(cfg, tree)
 
     def history():
@@ -285,7 +285,8 @@ def test_kunit_gen_end_to_end(kern, tmp_path):
     home = tmp_path / "home"
     ensure_home_layout(home)
     add_product(home, "kern", tree, "kunit")
-    ctx = make_context(home, "kern", overrides=["kunit.test_file=drivers/foo/foo_kunit.c", "kunit.test_dir=drivers/foo/tests", f"kunit.run_script={FAKE}"])
+    ctx = make_context(home, "kern", overrides=["kunit.test_file=drivers/foo/foo_kunit.c", "kunit.test_dir=drivers/foo/tests", f"kunit.run_script={FAKE}",
+                                                "coverage.enabled=true"])
 
     def case(n, b):
         return {"name": n, "purpose": n, "body": b}
