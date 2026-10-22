@@ -2,7 +2,7 @@
 
 > 이 문서는 GenUT(Generate Unit Tests)의 설계를 설명합니다. C 코드나 테스트 도구를 잘 모르는 사람도 흐름을 이해할 수 있도록 썼고, 구현자가 그대로 따라 만들 수 있을 만큼 구체적으로 적었습니다. 코드 구현은 이 문서를 함께 검토하고 합의한 뒤에 시작합니다.
 
-**문서 버전**: 0.4 (초안, 2026-10-22)
+**문서 버전**: 0.5 (초안, 2026-10-22)
 **상태**: 검토 중
 
 ---
@@ -91,6 +91,7 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기
 | 모델은 바꿔 끼운다 | 개발은 Claude로, 운영은 사내 Gemma 4로. 설계는 Gemma 4 수준을 기준으로 한다 |
 | 모든 실행은 되돌아볼 수 있다 | 모든 프롬프트·응답·판단·로그를 실행 기록에 남기고 HTML로 본다 |
 | 측정 없이 튜닝 없음 | 같은 코퍼스로 성공률을 재고, 규칙·프롬프트 변경의 효과를 숫자로 비교한다 |
+| 공통과 프로덕트를 가른다 | 한 번 셋업한 GenUT로 여러 프로덕트를 다룬다. 쌓이는 정보는 프로덕트 무관(공통)과 프로덕트별로 분리 저장하고 섞지 않는다 |
 
 ---
 
@@ -273,13 +274,18 @@ LLM 하나에 "이 함수 테스트 만들어서 빌드까지 통과시켜"라�
 ### 5.2 파일 구성
 
 ```
-rules/
+$GENUT_HOME/rules/            # 공통: 모든 프로덕트에 적용
 ├── common.md    # 두 백엔드 공통. 네이밍, 금지, 커버리지 기준, 출력 형식
 ├── gtest.md     # gtest 전용. fixture 사용 여부, 매처 선호, 파일 위치
-└── kunit.md     # KUnit 전용. 메모리 규칙, 스위트/모듈 매크로, static 함수 접근법
+└── kunit.md     # KUnit 전용. 메모리 규칙, 스위트/모듈 매크로
+
+<프로덕트 루트>/.genut/rules/   # 프로덕트 추가 규칙. 공통 뒤에 덧붙이며 충돌 시 프로덕트 우선
+├── common.md
+├── gtest.md
+└── kunit.md
 ```
 
-스텁 도구 사용법 md(`docs/stub-tools/`)는 규칙과 별개로 Stub Planner와 Test Writer에게만 들어갑니다.
+프롬프트에는 "공통 규칙"과 "이 프로덕트 규칙"을 구분해 넣습니다(11.5). 스텁 도구 사용법 md(`stub-tools/`)는 규칙과 별개로 Stub Planner와 Test Writer에게만 들어갑니다.
 
 ### 5.3 작성 요령
 
@@ -747,7 +753,7 @@ max_context = 32768
 
 ### 10.1 전제
 
-gtest용과 KUnit용 **자체 스텁 도구가 각각 따로** 있습니다. 사용법은 사용자가 `docs/stub-tools/gtest-stub.md`, `docs/stub-tools/kunit-stub.md`로 제공하며, **GenUT를 대상 프로젝트에 셋업할 때 두 md가 모두 제공됩니다**. 개발 단계에서는 연동 지점만 정의하고 NoopStub으로 테스트하며, 어댑터 구현은 md를 받은 뒤 합니다.
+gtest용과 KUnit용 **자체 스텁 도구가 각각 따로** 있습니다. 사용법은 사용자가 `gtest-stub.md`, `kunit-stub.md`로 제공하며, **GenUT를 셋업할 때 두 md가 모두 제공됩니다**. 공통 md는 `$GENUT_HOME/stub-tools/`에 두고, 프로덕트마다 다른 스텁 도구를 쓰면 `<프로덕트 루트>/.genut/stub-tools/`에 둔 것이 우선합니다(11.5). 개발 단계에서는 연동 지점만 정의하고 NoopStub으로 테스트하며, 어댑터 구현은 md를 받은 뒤 합니다.
 
 두 스텁 도구 모두 **static 함수에 접근할 수 있습니다**. 따라서 static 대상 함수를 직접 호출하거나 static 호출 심볼을 스텁하는 방법은 GenUT가 따로 만들지 않고 스텁 도구에 맡깁니다. 구체적인 사용법(어떤 선언을 넣는지, 어떤 매크로를 쓰는지)은 md에서 가져와 `describe()`와 Test Writer 프롬프트에 넣습니다.
 
@@ -798,15 +804,17 @@ class StubAdapter(Protocol):
 | `genut diff <run1> <run2>` | 두 실행 비교 |
 | `genut replay <run> --from <stage>` | 기록된 LLM 응답을 재사용해 특정 단계부터 재실행 |
 | `genut eval [--corpus PATH]` | 코퍼스 전체 성공률 측정, HTML 리포트 |
+| `genut product add\|list\|remove` | 프로덕트 등록 관리 (11.5) |
+| `genut knowledge list\|promote\|demote\|edit` | 축적 지식 관리 (11.5) |
 
 모든 toml 설정은 CLI 플래그로 덮어쓸 수 있습니다: `--candidates 3 --max-iterations 6 --provider openai_compat --log-token-budget 6000`.
 
 ### 11.2 실행 기록 디렉터리
 
-`genut gen` 한 번마다 하나씩 생깁니다. 나중에 무엇이든 되짚어 볼 수 있게 **모든 것**을 남깁니다.
+`genut gen` 한 번마다 프로덕트의 `.genut/runs/` 아래 하나씩 생깁니다. 나중에 무엇이든 되짚어 볼 수 있게 **모든 것**을 남깁니다.
 
 ```
-.genut/runs/20261022-143012-rb_push/
+<프로덕트 루트>/.genut/runs/20261022-143012-rb_push/
 ├── run.json             # 설정 스냅샷, provider/model, 규칙 md 해시, 결과 요약, 시간, 토큰
 ├── trace.jsonl          # 시간순 이벤트: 단계 시작/종료, 에이전트 호출, 도구 호출, 판정, 예산 상태
 ├── analysis.md          # 분석 보고서 (LLM에 들어간 그대로)
@@ -878,27 +886,102 @@ flowchart LR
 
 코드 수정 없이 파일 편집만으로 바꿀 수 있는 것:
 
-| 파일 | 내용 |
+| 파일 | 범위 | 내용 |
+|---|---|---|
+| `rules/*.md` | 공통 + 프로덕트 | 사람의 규칙 |
+| `$GENUT_HOME/prompts/<role>.md` | 공통 | 역할별 프롬프트 템플릿 (없으면 패키지 기본값) |
+| `$GENUT_HOME/knowledge/*.md`, `.genut/knowledge/product.md` | 공통 / 프로덕트 | 축적된 지식 노트 |
+| `src/genut/verify/classify.yaml` | 패키지 | 실패 분류 패턴과 권장 전략 |
+| `src/genut/verify/logs/reduce.yaml` | 패키지 | 축약 우선순위, 제거 패턴, 토큰 상한 |
+| `src/genut/analysis/flag_sanitizer.yaml` + `$GENUT_HOME/knowledge/flag_sanitizer.learned.yaml` | 패키지 + 공통 | 커널 플래그 제거 목록 |
+| `config.toml` / `product.toml` | 공통 / 프로덕트 | 예산, 후보 수, 경로 |
+
+### 11.5 여러 프로덕트 운영: 공통 정보와 프로덕트 정보의 분리
+
+GenUT는 한 번 셋업하면 여러 프로덕트의 코드에 대해 테스트를 생성합니다. 생성하면서 쌓이는 정보는 **프로덕트와 무관하게 쓰이는 것**과 **그 프로덕트에서만 쓰여야 하는 것**이 섞이면 안 됩니다. 섞이면 A 프로덕트의 헤더 경로나 심볼 이름이 B 프로덕트 프롬프트에 들어가 오히려 성공률을 떨어뜨립니다.
+
+#### 두 저장 위치
+
+| 범위 | 위치 | 담는 것 |
+|---|---|---|
+| **공통(global)** | `$GENUT_HOME/` (기본 `~/.genut/`) | LLM provider 설정, 예산 기본값, 공통 규칙, 역할 프롬프트 튜닝본, 공통 스텁 도구 md, 프로덕트 무관 지식, 실패 패턴→수정 사례, 커널 플래그 정제 학습 목록, 모델별 성공률 기준치 |
+| **프로덕트(product)** | `<프로덕트 루트>/.genut/` | 프로덕트 설정(백엔드, compile DB, 스크립트, test_file), 프로덕트 추가 규칙, 프로덕트 전용 스텁 md(있으면), 프로덕트 지식, 링크 범위·사전검증 캐시, 소스 버그 의심 목록, 실행 기록, 평가 코퍼스 |
+
+```
+$GENUT_HOME/
+├── config.toml              # 공통 설정
+├── products.toml            # 등록된 프로덕트 이름 → 루트 경로
+├── rules/                   # common.md, gtest.md, kunit.md (공통)
+├── prompts/                 # 역할 프롬프트 (사용자 튜닝본, 없으면 패키지 기본)
+├── stub-tools/              # 공통 스텁 도구 md
+├── knowledge/
+│   ├── global.md            # 프로덕트 무관 지식
+│   ├── fix_patterns.yaml    # 실패 분류+메시지 패턴 → 성공한 수정
+│   └── flag_sanitizer.learned.yaml
+└── evals/baselines/         # 모델별 기준 성공률
+
+<프로덕트 루트>/.genut/
+├── product.toml             # 프로덕트 설정
+├── rules/                   # 프로덕트 추가 규칙
+├── stub-tools/              # 프로덕트 전용 스텁 md (있으면 공통 대신 사용)
+├── knowledge/
+│   ├── product.md           # 프로덕트 지식
+│   ├── linkscope.cache.json
+│   ├── preflight.cache.json
+│   └── suspected_bugs.md
+├── runs/
+└── evals/corpus/
+```
+
+프로덕트는 `genut product add <이름> --root <경로>`로 등록하고, `genut gen`은 현재 디렉터리가 속한 프로덕트를 자동으로 찾습니다(`--product`로 지정 가능).
+
+#### 읽을 때: 겹쳐 올리기
+
+설정, 규칙, 지식 모두 **공통 → 프로덕트** 순으로 겹쳐 올립니다. 같은 항목이 양쪽에 있으면 프로덕트가 이깁니다.
+
+- 설정: 내장 기본값 < `$GENUT_HOME/config.toml` < `product.toml` < CLI 플래그
+- 규칙: 공통 규칙 뒤에 프로덕트 규칙을 덧붙임. 프롬프트에는 "공통 규칙"과 "이 프로덕트 규칙"으로 구분해 넣음
+- 지식: 프롬프트에 `global.md`와 `product.md`를 각각 토큰 예산 안에서 넣음. **다른 프로덕트의 지식은 절대 로드하지 않음**
+- 스텁 md: 프로덕트 `stub-tools/`가 있으면 그것, 없으면 공통
+
+#### 쓸 때: 범위를 정하는 규칙
+
+쌓이는 정보는 누가 쓰느냐에 따라 범위가 정해집니다.
+
+| 정보 | 누가 쓰나 | 범위 | 이유 |
+|---|---|---|---|
+| 링크 범위 캐시, 사전검증 캐시 | 코드 | 프로덕트 | 경로·심볼이 프로덕트 고유 |
+| 소스 버그 의심 목록 | 코드 | 프로덕트 | 그 소스의 사실 |
+| 커널 플래그 정제 학습 목록 | 코드 | 공통 | 툴체인 특성이지 프로덕트 특성이 아님 |
+| 실패 패턴 → 수정 사례 | 코드 + Note Keeper | 둘 다 | 패턴은 공통, 수정 내용에 프로덕트 심볼이 있으면 프로덕트 |
+| 자유 서술 지식 노트 | Note Keeper 에이전트 | 둘 다 | 아래 검증 규칙으로 결정 |
+
+**Note Keeper**는 실행이 끝난 뒤 실행 기록을 보고 "다음에 도움이 될 사실"을 뽑아 노트로 남기는 에이전트입니다. 노트마다 `scope: global | product`와 근거를 함께 냅니다. 코드가 다음 규칙으로 검증합니다.
+
+1. 노트에 프로덕트 루트 아래 경로, 프로덕트 분석에서 나온 심볼·타입 이름, 프로덕트 설정값이 하나라도 있으면 **무조건 프로덕트**로 강등한다.
+2. 공통 노트는 "어떤 프로덕트에서도 참"이어야 한다. 처음에는 **공통 후보**로 프로덕트 지식에 저장되고, 다른 프로덕트에서도 같은 노트(내용 해시)가 생기면 자동으로 공통으로 승격된다(`auto_promote_after_products`, 기본 2). 사람이 `genut knowledge promote <id>`로 바로 승격할 수도 있다.
+3. 노트는 짧은 한 문장 + 근거 실행 ID. 예:
+   - 공통: "KUnit에서 `kunit_kzalloc` 결과를 구조체 포인터 필드에 넣지 않으면 null_deref가 난다 (runs: alpha/…, beta/…)"
+   - 프로덕트: "`drivers/foo/foo.c`의 `foo_init`은 `foo_hw_reset` 스텁이 0을 반환해야 정상 경로로 간다 (run: 20261022-…)"
+
+#### 관리 명령
+
+| 명령 | 하는 일 |
 |---|---|
-| `rules/*.md` | 사람의 규칙 |
-| `src/genut/agents/prompts/<role>.md` | 역할별 프롬프트 템플릿 |
-| `src/genut/verify/classify.yaml` | 실패 분류 패턴과 권장 전략 |
-| `src/genut/verify/logs/reduce.yaml` | 축약 우선순위, 제거 패턴, 토큰 상한 |
-| `src/genut/analysis/flag_sanitizer.yaml` | 커널 플래그 제거 목록 |
-| `genut.toml` | 예산, 후보 수, 경로 |
+| `genut product add <이름> --root <경로>` / `list` / `remove` | 프로덕트 등록·목록·해제 |
+| `genut knowledge list [--scope global\|product]` | 노트 목록과 근거 |
+| `genut knowledge promote <id>` / `demote <id>` | 범위 변경 |
+| `genut knowledge edit [--scope …]` | 편집기로 열기 |
+| `genut doctor` | 공통/프로덕트 설정 겹침 결과와 실제로 로드되는 규칙·지식·스텁 md 파일 목록을 보여 줌 |
 
 ---
 
 ## 12. 설정 레퍼런스
 
-`genut.toml` 전체 항목입니다. 괄호는 기본값.
+설정은 공통 파일과 프로덕트 파일 두 개로 나뉩니다(11.5). 값은 기본값입니다.
 
 ```toml
-[project]
-backend = "gtest"                 # "gtest" | "kunit"
-rules_dir = "rules"
-runs_dir = ".genut/runs"
-
+# $GENUT_HOME/config.toml — 모든 프로덕트 공통 (기본 ~/.genut/)
 [llm]
 provider = "anthropic"            # "anthropic" | "openai_compat" | "fake"
 model = "claude-sonnet-5-5"
@@ -916,7 +999,7 @@ max_context = 32768
 supports_json_schema = true
 supports_n = false
 
-[budget]
+[budget]                          # 기본값. 프로덕트 설정에서 덮어쓸 수 있음
 candidates = 1                    # 후보 수 (Gemma 권장 3)
 parallel_candidates = false
 max_iterations = 4                # 전체 수정 라운드
@@ -929,11 +1012,22 @@ max_coverage_rounds = 3           # 커버리지 확장 라운드
 slow_build_threshold_sec = 120    # 사전검증이 이보다 느리면 스모크 생략
 log_token_budget = 4000           # 축약 로그 상한
 analysis_token_budget = 3000      # 분석 보고서 상한
+knowledge_token_budget = 1500     # 공통 지식 + 프로덕트 지식 합계 상한
 
 [coverage]
 enabled = true
 target_line_percent = 100
 tool = "gcov"                     # "gcov" | "llvm-cov" (gtest 전용. KUnit은 스크립트가 lcov 형식으로 제공)
+
+[knowledge]
+auto_promote_after_products = 2   # 같은 노트가 몇 개 프로덕트에서 나오면 공통으로 승격
+```
+
+```toml
+# <프로덕트 루트>/.genut/product.toml — 이 프로덕트 전용
+[product]
+name = "foo-driver"
+backend = "kunit"                 # "gtest" | "kunit"
 
 [gtest]
 compile_commands = "build/compile_commands.json"
@@ -956,6 +1050,12 @@ static_access = "stub_tool"       # "stub_tool" (스텁 도구가 static 접근 
 [analysis]
 include_struct_fields = true
 max_struct_fields = 30
+
+[budget]                          # 공통 기본값 중 이 프로덕트에서 바꿀 것만
+max_builds_per_function = 8
+max_seconds_per_function = 4800
+max_isolation_runs = 2
+candidates = 3
 ```
 
 ### KUnit 실행 스크립트 계약
@@ -982,7 +1082,7 @@ max_struct_fields = 30
 
 | # | 단계 | 산출물 | 검증 |
 |---|---|---|---|
-| 1 | 스켈레톤 | pyproject, 패키지, config, CLI(`init`,`doctor`,`gen`,`show`), trace, budget, state | 설정 로드·CLI 파싱·trace 기록 단위 테스트 |
+| 1 | 스켈레톤 | pyproject, 패키지, config(`$GENUT_HOME`/프로덕트 겹침 해석), CLI(`init`,`doctor`,`gen`,`show`,`product`), trace, budget, state | 설정 겹침 우선순위·프로덕트 자동 탐지·CLI 파싱·trace 기록 단위 테스트 |
 | 2 | LLM 계층 | provider 인터페이스, Fake/Anthropic/OpenAI-compat, `structured.py` | 스키마 출력 native/폴백/복구 경로를 FakeProvider로 테스트 |
 | 3 | 분석기 | compile_db, flag_sanitizer, parser, extractor, linkscope, summarizer | c_samples 픽스처로 추출 결과 테스트, 실제 커널 플래그 샘플로 정제 테스트 |
 | 4 | 검증 기반 | diagnostics, classify, staged(의미 검사), reduce | gcc/clang 출력 샘플로 파싱·분류 테스트, 축약 상한 준수 테스트 |
@@ -994,7 +1094,8 @@ max_struct_fields = 30
 | 10 | Reviewer + 평가 | reviewer(커버리지용 케이스의 단정 검사 포함), evals/corpus, `genut eval` | Claude 기준치 측정 |
 | 11 | 스텁 어댑터 | 백엔드별 `stub_adapter.py` (셋업 시 제공되는 md 기반) | 스텁 포함 e2e |
 | 12 | C++ 인스턴스 멤버 함수 | 생성자·멤버 상태 추출, gtest fixture 생성 | C++ 샘플 e2e |
-| 13 | Gemma 4 튜닝 | 프롬프트·N·예산 조정, 프로젝트 지식 노트 | eval 비교 |
+| 13 | 지식 노트 | Note Keeper, 범위 검증 규칙, 공통 후보→자동 승격, `knowledge` 명령, fix_patterns | 프로덕트 식별자 포함 노트가 공통으로 가지 않는지, 두 프로덕트 동일 노트 승격, 다른 프로덕트 지식 미로드 테스트 |
+| 14 | Gemma 4 튜닝 | 프롬프트·N·예산 조정 | eval 비교 |
 
 ### 13.2 자체 테스트 전략
 
@@ -1019,7 +1120,7 @@ max_struct_fields = 30
 
 검토 중 결정이 필요한 항목입니다. 답이 정해지면 본문에 반영하고 아래 "결정된 항목"으로 옮깁니다. 번호는 유지합니다.
 
-**현재 열린 질문은 없습니다.** 검토 중 새 질문이 생기면 13번부터 번호를 붙여 여기에 추가합니다.
+**현재 열린 질문은 없습니다.** 검토 중 새 질문이 생기면 14번부터 번호를 붙여 여기에 추가합니다.
 
 ### 결정된 항목
 
@@ -1037,3 +1138,4 @@ max_struct_fields = 30
 | 10 | gtest 대상 언어 | C 위주이나 C++도 있다. 자유 함수·static 멤버를 먼저, 인스턴스 멤버 함수는 12단계 | 6.3, 13장 12단계 |
 | 11 | 동시 실행 | 순차 실행. 병렬은 하지 않는다 | 11.1 |
 | 12 | 언어 | 리포트·뷰어·doctor 메시지·코드 주석 모두 한국어. 커밋 메시지는 CLAUDE.md에 따라 영어 | CLAUDE.md |
+| 13 | 여러 프로덕트 운영 | 공통 정보는 `$GENUT_HOME`, 프로덕트 정보는 `<루트>/.genut/`에 분리 저장. 읽을 때 공통→프로덕트 순으로 겹치고, 쓸 때는 범위 규칙과 Note Keeper 검증으로 섞이지 않게 한다 | 1장 원칙, 5.2, 10.1, 11.5, 12장, 13장 1·13단계 |
