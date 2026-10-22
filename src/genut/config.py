@@ -101,6 +101,7 @@ class AnalysisConfig(_M):
     include_struct_fields: bool = True
     max_struct_fields: int = 30
     libclang_path: str = ""  # 비우면 libclang 패키지가 제공하는 라이브러리 사용
+    resource_dir: str = ""  # 컴파일러 내장 헤더 위치. 비우면 컴파일러에게 물어 자동으로 찾음
 
 
 # ---------------------------------------------------------------- backends
