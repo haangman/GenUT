@@ -158,7 +158,7 @@ pre code { background: none; padding: 0; }
 
 <div class="topbar">
   <span class="brand">GenUT 설계 문서</span>
-  <span class="meta">v0.2 초안 · 2026-10-22 · 검토 중</span>
+  <span class="meta">v0.3 초안 · 2026-10-22 · 검토 중</span>
   <span class="spacer"></span>
   <button class="btn" id="btnAll" type="button">모두 접기</button>
   <button class="btn" id="btnTheme" type="button">테마 전환</button>
@@ -372,6 +372,7 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기</code><
 
 <h3>5.3 작성 요령</h3>
 <ul>
+  <li><b>한국어로</b>: 규칙 md는 한국어로 쓴다. 프롬프트에 그대로 삽입되며, 역할 지시문(영어)과 섞여도 동작하도록 설계한다. 효과는 <code>genut eval</code>로 확인한다.</li>
   <li><b>짧게</b>: 전체 규칙이 모델 컨텍스트의 일부를 차지한다. common + 백엔드 합쳐 100줄 이내를 권장한다.</li>
   <li><b>예시 하나씩</b>: "이렇게 쓰라"는 좋은 예 하나가 긴 설명보다 낫다.</li>
   <li><b>금지는 명시적으로</b>: "하지 말 것" 목록은 Reviewer가 그대로 검사 항목으로 쓴다.</li>
@@ -385,7 +386,7 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기</code><
 - 메모리 할당은 kunit_kzalloc(test, ...)만 사용한다. kmalloc/kfree 직접 호출 금지.
 - 테스트 이름: test_&lt;함수명&gt;_&lt;상황&gt;. 예: test_rb_push_when_full
 - 스위트 이름: &lt;소스파일명&gt;_test_suite
-- static 함수는 소스 파일을 #include "xxx.c" 로 포함해 접근한다.
+- static 함수 접근은 스텁 도구가 제공하는 방식을 따른다 (docs/stub-tools/kunit-stub.md 참고).
 
 ## 절대 금지
 - readl/writel/ioremap 등 MMIO 직접 호출. 반드시 스텁 도구로 대체.
@@ -429,7 +430,7 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기</code><
 <tr><td>호출 심볼</td><td><code>rb_alloc_slot</code>, <code>memcpy</code>, <code>pr_err</code></td><td>스텁 판단</td></tr>
 <tr><td>전역 참조</td><td><code>static struct rb_stats stats;</code> 읽기/쓰기</td><td>상태 격리 주의</td></tr>
 <tr><td>include 줄</td><td>선언이 있는 헤더 경로를 역추적해 <code>#include "rb.h"</code>로 확정</td><td>include 누락 방지</td></tr>
-<tr><td>static 여부</td><td><code>static int rb_alloc_slot(...)</code></td><td>접근 방법 결정(규칙 md에 따름)</td></tr>
+<tr><td>static 여부</td><td><code>static int rb_alloc_slot(...)</code></td><td>대상 함수나 호출 심볼이 static이면 스텁 도구의 static 접근 기능 사용 대상으로 표시</td></tr>
 <tr><td>전처리 조건</td><td><code>#ifdef CONFIG_RB_DEBUG</code> 안에 있음</td><td>빌드 설정 경고</td></tr>
 <tr><td>길이·복잡도</td><td>줄 수, 분기 수</td><td>케이스 수 추천, 예산 조정</td></tr>
 </table></div>
@@ -715,7 +716,7 @@ class ChatProvider(Protocol):
 <tr><td>추론</td><td>분류·판정은 코드가 미리 해 준다. LLM은 "이 분류의 실패를 고치는" 좁은 일만</td></tr>
 <tr><td>샘플링</td><td><code>candidates</code> 기본값을 Gemma에서는 3으로. supports_n이면 한 요청으로, 아니면 반복 호출</td></tr>
 <tr><td>비용</td><td>사내 API라 호출 수보다 <b>벽시계 시간</b>이 제약. 병렬 호출 옵션(<code>parallel_candidates</code>)</td></tr>
-<tr><td>프롬프트 언어</td><td>영어 (중형 모델은 영어 지시를 더 잘 따름). 리포트·뷰어·규칙 md는 한국어 가능. 규칙 md가 한국어면 프롬프트에 그대로 넣음 (열린 질문 14장)</td></tr>
+<tr><td>프롬프트 언어</td><td>역할 지시문은 영어 기본(중형 모델은 영어 지시를 더 잘 따름). 규칙 md는 한국어로 쓰고 프롬프트에 그대로 삽입. <code>prompt_language = "ko"</code>로 역할 지시문까지 한국어로 바꿀 수 있으며 genut eval로 두 설정을 비교한다</td></tr>
 </table></div>
 
 <h3>9.6 교체 절차</h3>
@@ -735,6 +736,7 @@ max_context = 32768</code></pre>
 
 <h3>10.1 전제</h3>
 <p>gtest용과 KUnit용 <b>자체 스텁 도구가 각각 따로</b> 있습니다. 사용법은 사용자가 <code>docs/stub-tools/gtest-stub.md</code>, <code>docs/stub-tools/kunit-stub.md</code>로 제공합니다. 이 문서 작성 시점에는 아직 없으므로, 연동 지점만 정의하고 구현은 md가 들어온 뒤 합니다.</p>
+<p>두 스텁 도구 모두 <b>static 함수에 접근할 수 있습니다</b>. 따라서 static 대상 함수를 직접 호출하거나 static 호출 심볼을 스텁하는 방법은 GenUT가 따로 만들지 않고 스텁 도구에 맡깁니다. 구체적인 사용법(어떤 선언을 넣는지, 어떤 매크로를 쓰는지)은 md에서 가져와 describe()와 Test Writer 프롬프트에 넣습니다.</p>
 
 <h3>10.2 어댑터 인터페이스</h3>
 <pre><code>class StubAdapter(Protocol):
@@ -762,7 +764,7 @@ max_context = 32768</code></pre>
 </ol>
 
 <h3>10.4 md가 없는 동안</h3>
-<p><code>NoopStubAdapter</code>가 동작합니다. 스텁이 없으므로 undefined 심볼이 있는 함수는 narrow_scope 또는 untestable로 처리되고, 리포트에 "스텁 도구 연동 필요"로 표시됩니다. 순수 함수(외부 호출이 없거나 external뿐인 함수)는 완전히 동작합니다.</p>
+<p><code>NoopStubAdapter</code>가 동작합니다. 스텁이 없으므로 undefined 심볼이 있는 함수는 narrow_scope 또는 untestable로 처리되고, 리포트에 "스텁 도구 연동 필요"로 표시됩니다. static 대상 함수는 설정 <code>static_access = "include_source"</code>일 때만 소스 파일 include 방식으로 접근하고, 기본값(stub_tool)에서는 "스텁 도구 연동 필요"로 표시됩니다. 순수 함수(외부 호출이 없거나 external뿐인 함수)는 완전히 동작합니다.</p>
 </details>
 
 <!-- 11 -->
@@ -870,7 +872,7 @@ runs_dir = ".genut/runs"
 provider = "anthropic"            # "anthropic" | "openai_compat" | "fake"
 model = "claude-sonnet-5-5"
 temperature = 0.2
-prompt_language = "en"            # 프롬프트 언어. 규칙 md는 그대로 삽입
+prompt_language = "en"            # 역할 지시문 언어 ("en" | "ko"). 규칙 md는 한국어 그대로 삽입
 
 [llm.anthropic]
 api_key_env = "ANTHROPIC_API_KEY"
@@ -910,7 +912,7 @@ test_file = "drivers/foo/foo_test.c"        # 사용자가 Makefile/Kconfig에 �
 run_script = "scripts/kunit_build_run.sh"   # 계약: &lt;test_file&gt; [--filter suite.case] --log &lt;path&gt;
 vmlinux = ""                      # 비우면 심볼화 생략
 test_timeout_sec = 600
-static_access = "include_source"  # "include_source" | "visible_if_kunit"
+static_access = "stub_tool"       # "stub_tool" (스텁 도구가 static 접근 제공) | "include_source" (NoopStub용 폴백)
 
 [analysis]
 include_struct_fields = true
@@ -973,10 +975,8 @@ max_struct_fields = 30</code></pre>
 <p>검토 중 결정이 필요한 항목입니다. 답이 정해지면 본문에 반영하고 아래 "결정된 항목"으로 옮깁니다. 번호는 유지합니다.</p>
 <div class="tbl"><table>
 <tr><th>#</th><th>질문</th><th>현재 가정</th></tr>
-<tr><td>2</td><td><b>static 함수 접근</b>: #include "xxx.c" 방식과 VISIBLE_IF_KUNIT/EXPORT_SYMBOL_IF_KUNIT 중 선호?</td><td>include_source 기본, 설정으로 전환</td></tr>
 <tr><td>3</td><td><b>스텁 도구 md 시점</b>: 두 md가 언제 제공되나? 그 전까지 NoopStub으로 진행해도 되나?</td><td>10단계 전까지 NoopStub</td></tr>
 <tr><td>4</td><td><b>기존 테스트 파일</b>: 같은 함수의 테스트가 이미 있으면 병합? 새 파일?</td><td>새 파일(_genut 접미사), 병합은 후속</td></tr>
-<tr><td>5</td><td><b>프롬프트 언어</b>: 영어 프롬프트 + 한국어 규칙 md 혼용이 Gemma 4에서 괜찮은가? 규칙 md도 영어로 쓸 것인가?</td><td>영어 프롬프트, 규칙 md는 사용자 선택. eval로 비교</td></tr>
 <tr><td>6</td><td><b>Gemma 4 n 샘플링</b>: 서빙이 한 요청에 n개 샘플을 지원하나?</td><td>미지원 가정, 반복 호출</td></tr>
 <tr><td>7</td><td><b>평가 코퍼스</b>: 실제 대상 프로젝트의 함수 일부를 코퍼스로 제공할 수 있나?</td><td>샘플 프로젝트로 시작</td></tr>
 <tr><td>8</td><td><b>커버리지 기준</b>: 케이스 최소 개수나 라인 커버리지 목표가 있나?</td><td>규칙 md의 "정상 1 + 오류 1 + 경계 1"</td></tr>
@@ -990,6 +990,8 @@ max_struct_fields = 30</code></pre>
 <div class="tbl"><table>
 <tr><th>#</th><th>질문</th><th>결정</th><th>반영 위치</th></tr>
 <tr><td>1</td><td>KUnit 테스트 파일 배치와 Kconfig/Makefile 반영</td><td>테스트 파일 경로는 사용자가 설정(<code>[kunit] test_file</code>)으로 지정한다. Kconfig/Makefile 등록은 GenUT 실행 전에 사용자가 한다. GenUT는 커널 빌드 설정을 수정하지 않는다</td><td>11.1 doctor 점검, 12장 설정·스크립트 계약</td></tr>
+<tr><td>2</td><td>static 함수 접근 방식</td><td>gtest·KUnit 스텁 도구 모두 static 함수에 접근할 수 있으므로 스텁 도구에 맡긴다. GenUT는 static 여부만 표시하고 접근 코드는 스텁 도구 md의 방식을 따른다. include_source는 NoopStub용 폴백으로만 남긴다</td><td>5.4 예시, 6.3, 10.1, 10.4, 12장 static_access</td></tr>
+<tr><td>5</td><td>규칙 md 언어</td><td>규칙 md는 한국어로 쓴다. 역할 지시문은 영어 기본이며 prompt_language로 한국어 전환 가능. 혼용 효과는 eval로 비교한다</td><td>5.3, 9.5, 12장 prompt_language</td></tr>
 </table></div>
 </details>
 
