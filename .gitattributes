@@ -1,0 +1,10 @@
+# Normalize line endings to LF for all text files so generated
+# gtest/KUnit sources build cleanly on Linux.
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.gif binary
+*.pdf binary
+*.zip binary
