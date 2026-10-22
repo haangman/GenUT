@@ -43,7 +43,8 @@ def semantic_check(path: Path, text: str, args: list[str], werror: bool = False,
         pr = parse(path, args, unsaved=files)
     except LibclangError as e:
         return CheckResult(False, reason=str(e))
-    diags = to_diagnostics(pr.tu, stage="check")
+    # 헤더를 못 찾으면 libclang은 fatal로 낸다. 빌드 로그 파서처럼(fatal error → error) 오류로 맞춘다.
+    diags = [d.model_copy(update={"severity": "error"}) if d.severity == "fatal" else d for d in to_diagnostics(pr.tu, stage="check")]
     for d in diags:
         if d.severity == "error" and FRAMEWORK_HEADERS.search(d.message):
             return CheckResult(False, reason=f"의미 검사 불가(프레임워크 헤더 없음): {d.message}")

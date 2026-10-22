@@ -6,8 +6,9 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from genut.config import AnthropicConfig, OpenAICompatConfig
+from genut.config import AnthropicConfig, GenutConfig, OpenAICompatConfig
 from genut.llm.anthropic_provider import FALLBACK_BETA, AnthropicProvider
+from genut.llm.factory import make_counter, make_provider
 from genut.llm.fake_provider import FakeProvider, minimal_from_schema
 from genut.llm.openai_compat_provider import OpenAICompatProvider
 from genut.llm.prompt_builder import OPTIONAL, REQUIRED, SHRINKABLE, ContextOverflow, Fragment, PromptBuilder
@@ -270,3 +271,45 @@ def test_anthropic_without_fallbacks_uses_plain_create():
     p = AnthropicProvider(AnthropicConfig(fallbacks=""), "claude-opus-5-5", client=_fake_client(store))
     p.chat(MSGS)
     assert "betas" not in store[0] and "fallbacks" not in store[0]
+
+
+# -------------------------------------------------------------------- factory
+def _cfg(**llm):
+    return GenutConfig.model_validate({"llm": llm})
+
+
+def test_make_provider_follows_config(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GENUT_LLM_KEY", raising=False)
+    a = make_provider(_cfg(provider="anthropic", model="claude-opus-5-5", anthropic={"max_context": 200_000}))
+    assert isinstance(a, AnthropicProvider) and a.model == "claude-opus-5-5"
+    assert a.capabilities.max_context == 200_000 and not a.capabilities.supports_temperature
+    o = make_provider(_cfg(provider="openai_compat", max_retries=7, openai_compat={"model": "gemma-4-27b", "supports_json_schema": False}))
+    assert isinstance(o, OpenAICompatProvider) and o.model == "gemma-4-27b" and o.max_retries == 7
+    assert not o.capabilities.json_schema
+    f = make_provider(_cfg(provider="fake", fake={"max_context": 1000}))
+    assert isinstance(f, FakeProvider) and f.capabilities.max_context == 1000
+
+
+def test_make_provider_fake_script(tmp_path):
+    script = tmp_path / "script.json"
+    script.write_text(json.dumps({"writer": [GOOD]}), encoding="utf-8")
+    p = make_provider(_cfg(provider="fake", fake={"script": str(script)}))
+    assert json.loads(p.chat(MSGS, tag="writer").text) == GOOD
+
+
+def test_make_counter_calibration_and_api_mode(tmp_path):
+    fake = FakeProvider(model="m")
+    assert make_counter(fake, _cfg(), None).calibration == 1.0
+    save_calibration(tmp_path, "m", estimated=100, actual=150)
+    counter = make_counter(fake, _cfg(), tmp_path)
+    assert counter.calibration == load_calibration(tmp_path, "m") > 1.0
+    assert counter("abc") > estimate_tokens("abc")
+
+    class Exact(FakeProvider):
+        def count_tokens(self, messages):
+            return 42
+
+    api = _cfg(context={"token_counter": "api"})
+    assert make_counter(Exact(model="m"), api, tmp_path)("abc") == 42
+    assert make_counter(fake, api, tmp_path)("abc") == counter("abc")  # 서버가 못 세면 보정한 추정
