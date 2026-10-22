@@ -33,7 +33,9 @@ def final_check(
     install_unverified: bool = False,
     trace: Trace | None = None,
     interrupted: bool = False,
+    install: bool = True,
 ) -> None:
+    """install=False면 확인까지만 하고 프로덕트 트리에는 쓰지 않는다 (genut eval). 결과 파일은 final/에 남는다."""
     def event(type_: str, **data: object) -> None:
         if trace is not None:
             trace.event(type_, **data)
@@ -63,7 +65,7 @@ def final_check(
             rr = backend.run(r, out)
             failed = [n for n in r.cases if rr.results.get(n) is None or rr.results[n].status != "pass"]
             if not failed:
-                _install(backend, rundir, u, r, "partial" if f in reduced else "ok")
+                _install(backend, rundir, u, r, "partial" if f in reduced else "ok", install)
                 continue
             for n in failed:
                 case = u.state.case(n)
@@ -76,22 +78,23 @@ def final_check(
             elif budget.can_build(use_reserve=True):
                 retry[f] = u
             else:  # 예약 빌드가 없다: 이번 확인에서 통과한 케이스로 확정한다
-                _install(backend, rundir, u, backend.render(u, u.state.passed()), "partial")
+                _install(backend, rundir, u, backend.render(u, u.state.passed()), "partial", install)
         for u in broken:
             event("final_build_failed", function=u.function)
-            _fallback(backend, rundir, state, u, install_unverified)
+            _fallback(backend, rundir, state, u, install_unverified, install)
         pending = retry
     for u in pending.values():  # 중단되었거나 예약 빌드가 없다
-        _fallback(backend, rundir, state, u, install_unverified)
+        _fallback(backend, rundir, state, u, install_unverified, install)
 
 
-def _install(backend: Backend, rundir: RunDir, u: TestUnit, r: Rendered, check: str) -> None:
+def _install(backend: Backend, rundir: RunDir, u: TestUnit, r: Rendered, check: str, install: bool = True) -> None:
     rundir.write_text(f"final/{r.file_name}", r.text)
-    u.state.installed_path = str(backend.install(r))
+    if install:
+        u.state.installed_path = str(backend.install(r))
     u.state.final_check = check
 
 
-def _fallback(backend: Backend, rundir: RunDir, state: RunState, u: TestUnit, install_unverified: bool) -> None:
+def _fallback(backend: Backend, rundir: RunDir, state: RunState, u: TestUnit, install_unverified: bool, install: bool = True) -> None:
     fs = u.state
     passed = {c.name for c in fs.passed()}
     snaps = [s for s in state.snapshots if s.function == fs.name and s.cases and set(s.cases) <= passed]
@@ -100,7 +103,7 @@ def _fallback(backend: Backend, rundir: RunDir, state: RunState, u: TestUnit, in
         best = max(snaps, key=lambda s: (len(s.cases), s.build_no))
         text = (rundir.path / best.path).read_text(encoding="utf-8")
         snap = Rendered(function=fs.name, file_name=full.file_name, text=text, line_map=LineMap(path=full.file_name), cases=list(best.cases), suite=full.suite, source=full.source)
-        _install(backend, rundir, u, snap, "snapshot")
+        _install(backend, rundir, u, snap, "snapshot", install)
         rest = sorted(passed - set(best.cases))
         if rest:
             rundir.write_text(f"final/unverified/{full.file_name}", UNVERIFIED_HEADER + full.text)
@@ -108,7 +111,7 @@ def _fallback(backend: Backend, rundir: RunDir, state: RunState, u: TestUnit, in
         return
     rundir.write_text(f"final/{full.file_name}", UNVERIFIED_HEADER + full.text)
     fs.final_check = "unverified"
-    if install_unverified:
+    if install_unverified and install:
         marked = Rendered(function=fs.name, file_name=full.file_name, text=UNVERIFIED_HEADER + full.text, line_map=full.line_map, cases=full.cases, suite=full.suite, source=full.source)
         fs.installed_path = str(backend.install(marked))
 

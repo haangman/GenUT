@@ -1,0 +1,30 @@
+# GenUT 평가 코퍼스: tests/fixtures/sample_project (설계 13.3). 경로는 프로덕트 루트(샘플 프로젝트) 기준.
+# 실행 방법은 evals/README.md.
+
+[[item]]
+file = "src/ring_buffer.c"
+function = "rb_init"
+
+[[item]]
+file = "src/ring_buffer.c"
+function = "rb_push"
+
+[[item]]
+file = "src/ring_buffer.c"
+function = "rb_used"
+
+[[item]]
+file = "src/ring_buffer.c"
+function = "rb_state_name"
+
+[[item]]
+file = "src/str_util.c"
+function = "str_count_char"
+
+[[item]]
+file = "src/str_util.c"
+function = "str_is_blank"
+
+[[item]]
+file = "src/str_util.c"
+function = "str_clamp"

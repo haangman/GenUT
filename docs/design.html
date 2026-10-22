@@ -1376,7 +1376,7 @@ max_context = 32768</code></pre>
 <tr><td><code>genut diff &lt;run1&gt; &lt;run2&gt;</code></td><td>두 실행 비교</td></tr>
 <tr><td><code>genut replay &lt;run&gt; --from &lt;stage&gt;</code></td><td>기록된 LLM 응답을 재사용해 특정 단계부터 재실행</td></tr>
 <tr><td><code>genut finalize &lt;run&gt;</code></td><td>중단되었거나 "미확인"으로 남은 실행의 통과 케이스로 최종 확인만 다시 해서 설치 (LLM 호출 없음, 7.10). 빌드 설정은 지금 설정이 아니라 그 실행의 <code>run.json</code>에 기록된 설정(<code>--set</code> 포함)을 쓴다</td></tr>
-<tr><td><code>genut eval [--corpus PATH]</code></td><td>코퍼스 전체 성공률 측정, HTML 리포트</td></tr>
+<tr><td><code>genut eval [--corpus PATH] [--label L] [--save-baseline] [--compare R]</code></td><td>코퍼스 전체 성공률 측정, HTML 리포트. 코퍼스는 <code>[[item]] file = ..., function = ...</code> 형식의 TOML(기본 <code>products/&lt;이름&gt;/evals/corpus/corpus.toml</code>, 샘플은 저장소의 <code>evals/sample_corpus.toml</code>). 항목마다 생성 실행을 하되 프로덕트 트리에는 설치하지 않는다(측정만). 결과는 <code>products/&lt;이름&gt;/evals/runs/</code>에, <code>--save-baseline</code>이면 모델별 기준치를 <code>$GENUT_HOME/evals/baselines/&lt;모델&gt;.json</code>에 남기고, 다음 평가는 같은 모델의 기준치와 자동으로 비교한다</td></tr>
 <tr><td><code>genut product add|list|remove</code></td><td>프로덕트 등록 관리 (11.5)</td></tr>
 <tr><td><code>genut knowledge list|promote|demote|edit</code></td><td>축적 지식 관리 (11.5)</td></tr>
 </table></div>

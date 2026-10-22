@@ -236,6 +236,48 @@ def replay(
         raise typer.Exit(1)
 
 
+# ------------------------------------------------------------------- eval
+@app.command("eval")
+def eval_(
+    corpus: Annotated[Optional[Path], typer.Option("--corpus", help="코퍼스 파일 (생략하면 products/<이름>/evals/corpus/corpus.toml)")] = None,
+    label: Annotated[str, typer.Option("--label", help="이번 평가의 이름 (예: 규칙 v3)")] = "",
+    save_baseline: Annotated[bool, typer.Option("--save-baseline", help="이번 결과를 이 모델의 기준치로 저장")] = False,
+    compare_to: Annotated[Optional[Path], typer.Option("--compare", help="비교할 results.json (생략하면 이 모델의 기준치)")] = None,
+    open_: Annotated[bool, typer.Option("--open/--no-open", help="HTML 리포트를 브라우저로 연다")] = False,
+    home: HomeOpt = None,
+    product: ProductOpt = None,
+    set_: SetOpt = None,
+) -> None:
+    """코퍼스 전체의 성공률을 재고 기준치와 비교한다. 프로덕트 트리에는 설치하지 않는다."""
+    from genut.evaluation import baseline_path, compare, corpus_path, load_corpus, load_result, run_eval, write_reports
+    from genut.evaluation import save_baseline as store_baseline
+
+    try:
+        ctx = make_context(_home(home), product, overrides=set_, require_product=True)
+    except (ProductError, ValueError) as e:
+        _fail(str(e))
+    path = (corpus or corpus_path(ctx)).expanduser()
+    if not path.is_file():
+        _fail(f"코퍼스가 없습니다: {path}\n[[item]] 마다 file = \"src/a.c\", function = \"f\" 를 적은 TOML을 만드세요.")
+    try:
+        items = load_corpus(path)
+    except (ValueError, OSError) as e:
+        _fail(str(e))
+    res, out = run_eval(ctx, items, corpus=str(path), label=label, echo=typer.echo)
+    base_file = compare_to or baseline_path(ctx.home, res.summary.model)
+    base = load_result(base_file) if base_file.is_file() else None
+    page = write_reports(res, out, base)
+    for title, cur, ref, delta in compare(res.summary, base.summary if base else None):
+        typer.echo(f"  {title:<14} {cur:>8}" + (f"  (기준 {ref}, {delta})" if base and delta else ""))
+    typer.echo(f"리포트: {page}")
+    if save_baseline:
+        typer.echo(f"기준치 저장: {store_baseline(ctx.home, res)}")
+    if open_:
+        import webbrowser
+
+        webbrowser.open(page.as_uri())
+
+
 def main() -> None:
     # Windows 콘솔에서 한국어가 깨지지 않게
     for stream in (sys.stdout, sys.stderr):

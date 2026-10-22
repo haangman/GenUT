@@ -99,3 +99,44 @@ def test_gen_reaches_full_line_coverage(tmp_path):
     assert list(run.glob("coverage/m0/rb_push.coverage.info"))  # gcov 결과를 lcov로 남긴다
     prompt = next(p for p in (run / "prompts").iterdir() if p.name.endswith("test_writer-coverage.md")).read_text(encoding="utf-8")
     assert "조건 (slot == NULL) 참 (:37) → RB_ENOMEM 반환" in prompt
+
+
+def test_eval_cli_measures_corpus(tmp_path):
+    """genut eval: 코퍼스를 실제 gtest로 돌려 지표·리포트·기준치를 남기고, 프로덕트 트리에는 설치하지 않는다."""
+    root, home = tmp_path / "proj", tmp_path / "home"
+    shutil.copytree(SAMPLE, root)
+    cli = CliRunner()
+    assert cli.invoke(app, ["product", "add", "sample", "--root", str(root), "--home", str(home)]).exit_code == 0
+    corpus = tmp_path / "corpus.toml"
+    corpus.write_text('[[item]]\nfile = "src/ring_buffer.c"\nfunction = "rb_init"\n\n[[item]]\nfile = "src/str_util.c"\nfunction = "str_clamp"\n', encoding="utf-8")
+    init_ok = 'struct rb rb;\nunsigned char buf[4];\nEXPECT_EQ(rb_init(&rb, buf, sizeof(buf)), RB_OK);'
+    script = tmp_path / "script.json"
+    script.write_text(json.dumps({
+        "analyzer": [{"testable": True, "reason": "", "cautions": [], "recommended": []}],
+        "test_writer": [_cases(("test_rb_init_ok", init_ok)), _cases(("test_rb_init_null", "EXPECT_EQ(rb_init(NULL, NULL, 0), RB_EINVAL);")),
+                        _cases(("test_str_clamp_mid", "EXPECT_EQ(str_clamp(5, 0, 10), 5);")),
+                        _cases(("test_str_clamp_low", "EXPECT_EQ(str_clamp(-1, 0, 10), 1);"))],  # 실제값 0이라 실패
+        "fixer": [{"strategy": "drop_case", "reason": "기대값 근거 없음", "body": "", "evidence": "", "suspected_bug": False, "helpers": []}],
+        "reviewer": [{"findings": []}],
+    }), encoding="utf-8")
+    before = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+    args = ["eval", "--corpus", str(corpus), "--label", "e2e", "--save-baseline", "--home", str(home), "--product", "sample",
+            "--set", "llm.provider=fake", "--set", f"llm.fake.script={script}", "--set", "gtest.link_targets=[rb,rbslot,strutil]",
+            "--set", "coverage.enabled=false"]
+    r = cli.invoke(app, args)
+    assert r.exit_code == 0, r.output
+    assert "[1/2] src/ring_buffer.c:rb_init → rb_init complete (2/2)" in r.output and "[2/2] src/str_util.c:str_clamp → str_clamp partial (1/2)" in r.output
+    out = next((home / "products" / "sample" / "evals" / "runs").iterdir())
+    res = json.loads((out / "results.json").read_text(encoding="utf-8"))
+    assert res["summary"]["complete_rate"] == 0.5 and res["summary"]["salvaged_rate"] == 1.0 and res["summary"]["case_pass_rate"] == 0.75
+    assert res["summary"]["failure_categories"] == {"assertion_failed": 1}
+    assert (out / "report.html").exists() and (home / "evals" / "baselines" / "fake-model.json").exists()
+    after = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and "build-genut" not in p.relative_to(root).parts}
+    assert after == before  # 평가는 설치하지 않는다
+
+    rerun = [a for a in args if a != "--save-baseline"]
+    rerun[rerun.index("--label") + 1] = "e2e-2"
+    again = cli.invoke(app, rerun)
+    assert again.exit_code == 0, again.output
+    second = next(p for p in (home / "products" / "sample" / "evals" / "runs").iterdir() if p.name.endswith("e2e-2"))
+    assert "- 기준치: fake-model · " in (second / "report.md").read_text(encoding="utf-8")  # 같은 모델의 기준치와 자동으로 비교

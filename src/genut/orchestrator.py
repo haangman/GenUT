@@ -1,8 +1,8 @@
 """오케스트레이터: 생성 실행 하나를 끝까지 진행하는 상태 머신 (설계 3장, 7장).
 
 실행 하나는 소스 파일 하나다. 순서는 코드가 정하고 LLM은 에이전트 호출로 좁은 질문에만 답한다.
-  ① 분석 → ② 스텁 → ③ 사전검증 → ④ 스모크 → ⑤ 확장 → ⑥ 수정 → ⑦ 커버리지 → 최종 확인
-  (⑧ Reviewer 에이전트는 10단계에서 들어온다. 코드 리뷰 검사는 통과 즉시 돈다)
+  ① 분석 → ② 스텁 → ③ 사전검증 → ④ 스모크 → ⑤ 확장 → ⑥ 수정 → ⑦ 커버리지 → ⑧ 리뷰 → 최종 확인
+  (코드 리뷰 검사는 케이스가 통과하는 즉시, Reviewer 에이전트는 ⑧에서 코드가 판단하기 어려운 것만 본다)
 - 검증 라운드: 의미 검사로 먼저 걸러 낸 뒤 모든 함수를 한 번에 빌드하고(7.8) 함수별로 실행한다.
   빌드에는 통과·새·미실행 케이스만 넣는다. 실패 케이스는 고친 뒤(new) 다시 들어간다
 - 케이스는 단조 진행한다(7.4). 통과 케이스는 바뀌지 않고, 공유 영역이 바뀐 라운드에 통과 케이스가
@@ -23,6 +23,7 @@ from pathlib import Path
 from genut.agents.analyzer import Analyzer, UnreachableAnalyzer
 from genut.agents.base import AgentEnv, AgentError
 from genut.agents.fixer import Fixer, apply_fix, failure_text, give_up
+from genut.agents.reviewer import Reviewer
 from genut.agents.test_writer import TestWriter
 from genut.analysis.extractor import analyze_file
 from genut.analysis.flag_sanitizer import FlagSanitizer
@@ -47,9 +48,9 @@ from genut.trace import RunDir, Trace
 from genut.verify.classify import Classifier, allowed_strategies
 from genut.verify.review import justified, review_case
 
-STAGES = ("analyze", "stub", "preflight", "smoke", "expand", "fix", "coverage")
+STAGES = ("analyze", "stub", "preflight", "smoke", "expand", "fix", "coverage", "review")
 STEP = {"analyze": (1, "분석"), "stub": (2, "스텁"), "preflight": (3, "사전검증"), "smoke": (4, "스모크"), "expand": (5, "확장"), "fix": (6, "수정"),
-        "coverage": (7, "커버리지")}
+        "coverage": (7, "커버리지"), "review": (8, "리뷰")}
 BUILDABLE = (CaseStatus.NEW, CaseStatus.PASS, CaseStatus.NOT_RUN)
 FAILING = (CaseStatus.FAIL, CaseStatus.CRASH)
 _SUFFIX = re.compile(r"_\d+$")
@@ -76,6 +77,7 @@ class GenOptions:
     functions: list[str] = field(default_factory=list)  # 비우면 파일의 모든 비static 함수
     dry_run: bool = False  # LLM·빌드 없이 프롬프트만 만들어 기록 (11.4)
     stop_after: str = ""  # 이 단계 뒤에 멈춤. 최종 확인·설치는 하지 않는다 (genut finalize로 이어 갈 수 있음)
+    install: bool = True  # False면 최종 확인까지 하되 프로덕트 트리에 쓰지 않는다 (genut eval)
 
 
 def make_backend(ctx: AppContext) -> Backend:
@@ -159,6 +161,7 @@ class Orchestrator:
         self.env = AgentEnv(self.provider, make_counter(self.provider, cfg, ctx.home), cfg, self.rules, ctx.home, self.trace, self.budget)
         self.analyzer, self.writer, self.fixer = Analyzer(self.env), TestWriter(self.env), Fixer(self.env)
         self.unreachable = UnreachableAnalyzer(self.env)
+        self.reviewer = Reviewer(self.env)
         self.started = datetime.now()
         self._write_run_json()
 
@@ -362,6 +365,37 @@ class Orchestrator:
             self._agent_error(e, u, "도달 불가 분류")
             u.state.unreachable = [UnreachableLine(line=n, category="unknown", reason=f"분류하지 못함 ({e.kind})") for n in lines]
         self._say("coverage", f"{u.function}: 남은 미커버 " + ", ".join(f":{x.line} {x.category}" for x in u.state.unreachable))
+
+    # ============================================================= ⑧ 리뷰
+    def _review(self) -> None:
+        """코드 검사를 통과한 케이스를 Reviewer가 본다. 지적된 케이스는 1회 고치거나 제거한다 (설계 3.2 ⑧).
+
+        수정은 빌드가 한 번 더 들므로 빌드 예산이 있을 때만 한다. 고친 케이스는 다시 검증·코드 검사를 받고
+        Reviewer에게 다시 가지 않는다. 제거로 커버리지가 떨어지면 최종 확인 뒤 다시 잰 값이 리포트에 남는다.
+        """
+        flagged = False
+        for u in self.units:
+            if not u.state.passed():
+                continue
+            try:
+                res = self.reviewer.review(u.report, u.state)
+            except AgentError as e:
+                self._agent_error(e, u, "리뷰")
+                continue
+            for f in res.findings:
+                c = u.state.case(f.case)
+                u.state.review_notes.append(f"{c.name}: {f.kind} — {f.detail}")
+                if c.review_fixes_used >= 1 or u.state.status != FunctionStatus.ACTIVE or not self.budget.can_build() or self.opts.dry_run:
+                    c.drop(self.state.round, "review", f"리뷰 지적({f.kind}): {f.detail}")
+                    continue
+                c.review_fixes_used += 1
+                c.fixes_used = max(c.fixes_used, self.cfg.budget.max_case_fixes - 1)  # 리뷰 지적은 한 번만 고친다
+                self._fail(c, FailureInfo(category="review_reject", stage="review", summary=f.detail, review_check=f.kind,
+                                          recommended_strategy="fix_case"), "review")
+                flagged = True
+            self._say("review", f"{u.function}: 지적 {len(res.findings)}건" + (f" ({', '.join(f'{x.case}:{x.kind}' for x in res.findings)})" if res.findings else ""))
+        if flagged:
+            self._fix_loop()
 
     def _summary(self, stage: str) -> None:
         for u in self.units:
@@ -717,7 +751,7 @@ class Orchestrator:
             "dry_run": self.opts.dry_run,
             "stop_after": self.opts.stop_after,
             "rules_hash": text_hash(self.rules.prompt_block()),
-            "prompts": {a.role: a.prompt.digest() for a in (self.analyzer, self.writer, self.fixer, self.unreachable)},
+            "prompts": {a.role: a.prompt.digest() for a in (self.analyzer, self.writer, self.fixer, self.unreachable, self.reviewer)},
             "started": self.started.isoformat(timespec="seconds"),
             "finished": datetime.now().isoformat(timespec="seconds") if finished else "",
             "stage": self.state.stage,
@@ -738,11 +772,11 @@ class Orchestrator:
                 self.state.stage = self.env.stage = "final"
                 try:
                     final_check(self.backend, self.units, self.state, self.budget, self.rundir, self.cfg.finalize.install_unverified,
-                                self.trace, interrupted=self.state.interrupted)
+                                self.trace, interrupted=self.state.interrupted, install=self.opts.install)
                 except KeyboardInterrupt:
                     self.state.interrupted = True
                     final_check(self.backend, self.units, self.state, self.budget, self.rundir, self.cfg.finalize.install_unverified,
-                                self.trace, interrupted=True)
+                                self.trace, interrupted=True, install=self.opts.install)
                 if self.cfg.coverage.enabled and not self.state.interrupted:
                     for u in self.units:  # 최종 확인으로 케이스가 빠졌을 수 있으니 설치본 기준으로 다시 잰다
                         if u.state.final_check in ("ok", "partial"):

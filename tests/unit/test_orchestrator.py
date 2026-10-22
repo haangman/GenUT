@@ -233,7 +233,7 @@ def test_slow_preflight_skips_smoke(world):
     world.be.preflight_seconds = 500
     st, orch, p = run(world, {"test_writer": [cases(("test_rb_push_null", NULL))]})
     assert st.smoke_skipped and statuses(st) == {"test_rb_push_null": CaseStatus.PASS}
-    assert [c["tag"] for c in p.calls] == ["analyzer", "test_writer"]
+    assert [c["tag"] for c in p.calls] == ["analyzer", "test_writer", "reviewer"]
     assert not list((orch.rundir.path / "prompts").glob("*smoke*"))
 
 
@@ -298,7 +298,7 @@ def test_replay_reuses_recorded_responses(world):
 
     live = FakeProvider(script={"fixer": [fix("drop_case", reason="다시 받은 응답")]})
     third = replay_run(ctx, orch.rundir.path, live_from="fix", live=live, backend=world.be)
-    assert [c["tag"] for c in live.calls] == ["fixer"]  # 수정 단계만 실제 provider
+    assert [c["tag"] for c in live.calls] == ["fixer", "reviewer"]  # 수정 단계와 그 뒤 단계(리뷰)만 실제 provider
     assert third.state.functions["rb_push"].case("test_rb_push_full").drop_reason == "다시 받은 응답"
 
 
@@ -349,3 +349,39 @@ def test_coverage_disabled_skips_measurement(world):
     world.be.executable_lines = LINES
     st, *_ = run(world, {"test_writer": [SMOKE]}, overrides=["coverage.enabled=false"])
     assert world.be.coverage_calls == [] and st.functions["rb_push"].coverage is None
+
+
+# ---------------------------------------------------------------- ⑧ 리뷰
+def review(*findings):
+    return {"findings": [{"case": c, "kind": k, "detail": d} for c, k, d in findings]}
+
+
+def test_reviewer_finding_gets_one_fix(world):
+    st, orch, p = run(world, {
+        "test_writer": [SMOKE, cases(("test_rb_push_null", NULL))],
+        "reviewer": [review(("test_rb_push_null", "meaningless_assertion", "NULL만 확인해 반환값의 의미를 보지 않는다"))],
+        "fixer": [fix(body=NULL + "\nEXPECT_EQ(rb_push(NULL, NULL, 0), RB_EINVAL);")],
+    })
+    fs = st.functions["rb_push"]
+    c = fs.case("test_rb_push_null")
+    assert c.status == CaseStatus.PASS and c.review_fixes_used == 1 and "rb_push(NULL, NULL, 0)" in c.body
+    assert fs.review_notes == ["test_rb_push_null: meaningless_assertion — NULL만 확인해 반환값의 의미를 보지 않는다"]
+    fx = fixer_prompts(p)[0]
+    assert "Failure category: review_reject" in fx and "리뷰 검사: meaningless_assertion" in fx
+    assert [c["tag"] for c in p.calls].count("reviewer") == 1  # 고친 케이스는 Reviewer에게 다시 가지 않는다
+    assert "- 리뷰: test_rb_push_null: meaningless_assertion" in (orch.rundir.path / "final" / "report.md").read_text(encoding="utf-8")
+
+
+def test_reviewer_finding_without_budget_drops_case(world):
+    st, *_ = run(world, {
+        "test_writer": [SMOKE, cases(("test_rb_push_null", NULL))],
+        "reviewer": [review(("test_rb_push_null", "rule_violation", "규칙의 이름 형식을 어김"))],
+    }, overrides=["budget.max_builds_per_run=4", "budget.final_build_reserve=1"])
+    c = st.functions["rb_push"].case("test_rb_push_null")
+    assert c.status == CaseStatus.DROPPED and c.drop_reason == "리뷰 지적(rule_violation): 규칙의 이름 형식을 어김"
+
+
+def test_reviewer_ignores_unknown_cases(world):
+    st, orch, _ = run(world, {"test_writer": [SMOKE], "reviewer": [review(("test_nope", "meaningless_assertion", "없는 케이스"))]})
+    assert st.functions["rb_push"].case("test_rb_push_ok").status == CaseStatus.PASS and st.functions["rb_push"].review_notes == []
+    assert any("지적 0건" in e["text"] for e in events(orch, "message"))

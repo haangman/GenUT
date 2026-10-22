@@ -987,7 +987,7 @@ class StubAdapter(Protocol):
 | `genut diff <run1> <run2>` | 두 실행 비교 |
 | `genut replay <run> --from <stage>` | 기록된 LLM 응답을 재사용해 특정 단계부터 재실행 |
 | `genut finalize <run>` | 중단되었거나 "미확인"으로 남은 실행의 통과 케이스로 최종 확인만 다시 해서 설치 (LLM 호출 없음, 7.10). 빌드 설정은 지금 설정이 아니라 그 실행의 `run.json`에 기록된 설정(`--set` 포함)을 쓴다 |
-| `genut eval [--corpus PATH]` | 코퍼스 전체 성공률 측정, HTML 리포트 |
+| `genut eval [--corpus PATH] [--label L] [--save-baseline] [--compare R]` | 코퍼스 전체 성공률 측정, HTML 리포트. 코퍼스는 `[[item]] file = ..., function = ...` 형식의 TOML(기본 `products/<이름>/evals/corpus/corpus.toml`, 샘플은 저장소의 `evals/sample_corpus.toml`). 항목마다 생성 실행을 하되 프로덕트 트리에는 설치하지 않는다(측정만). 결과는 `products/<이름>/evals/runs/`에, `--save-baseline`이면 모델별 기준치를 `$GENUT_HOME/evals/baselines/<모델>.json`에 남기고, 다음 평가는 같은 모델의 기준치와 자동으로 비교한다 |
 | `genut product add\|list\|remove` | 프로덕트 등록 관리 (11.5) |
 | `genut knowledge list\|promote\|demote\|edit` | 축적 지식 관리 (11.5) |
 
