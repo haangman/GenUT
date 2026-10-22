@@ -180,7 +180,7 @@ figure.fig figcaption { font-size: .85rem; color: var(--fg-muted); margin-top: 8
 
 <div class="topbar">
   <span class="brand">GenUT 설계 문서</span>
-  <span class="meta">v0.7 초안 · 2026-10-22 · 검토 중</span>
+  <span class="meta">v0.8 초안 · 2026-10-22 · 검토 중</span>
   <span class="spacer"></span>
   <button class="btn" id="btnAll" type="button">모두 접기</button>
   <button class="btn" id="btnTheme" type="button">테마 전환</button>
@@ -267,7 +267,7 @@ figure.fig figcaption { font-size: .85rem; color: var(--fg-muted); margin-top: 8
 <rect x="270" y="300" width="170" height="60" rx="6" class="bx"/>
 <text x="355" y="323" text-anchor="middle">공통 저장소</text><text x="355" y="340" text-anchor="middle" class="m">$GENUT_HOME/</text>
 <rect x="460" y="300" width="170" height="60" rx="6" class="bx"/>
-<text x="545" y="323" text-anchor="middle">프로덕트 저장소</text><text x="545" y="340" text-anchor="middle" class="m">&lt;루트&gt;/.genut/</text>
+<text x="545" y="323" text-anchor="middle">프로덕트 저장소</text><text x="545" y="340" text-anchor="middle" class="m">products/&lt;이름&gt;/</text>
 <text x="450" y="385" text-anchor="middle" class="s">설정 · 규칙 · 지식 · 캐시 · 실행 기록 (11.5)</text>
 <rect x="720" y="140" width="180" height="60" rx="6" class="bx"/>
 <text x="810" y="163" text-anchor="middle" class="t">LLM Provider</text><text x="810" y="180" text-anchor="middle" class="s">Claude(개발) · Gemma 4(운영)</text>
@@ -305,7 +305,7 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기</code><
 [6/8] 수정      round 1: fix_case(test_rb_push_full) ✓ · drop_case(test_rb_push_null_buf: 소스 버그 의심)
 [7/8] 커버리지  라인 92% (27/29) → 미커버 :51 :63 → 케이스 1개 추가 → 100%
 [8/8] 리뷰      지적 0건
-완료  통과 6 · 제거 1 · 커버리지 100% · 소요 52s · 토큰 24k   → .genut/runs/20261022-143012-rb_push/</code></pre>
+완료  통과 6 · 제거 1 · 커버리지 100% · 소요 52s · 토큰 24k   → ~/.genut/products/ringbuf/runs/20261022-143012-rb_push/</code></pre>
 
 <h3>핵심 설계 원칙</h3>
 <div class="principles">
@@ -524,7 +524,7 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기</code><
 ├── gtest.md     # gtest 전용. fixture 사용 여부, 매처 선호, 파일 위치
 └── kunit.md     # KUnit 전용. 메모리 규칙, 스위트/모듈 매크로
 
-&lt;프로덕트 루트&gt;/.genut/rules/   # 프로덕트 추가 규칙. 공통 뒤에 덧붙이며 충돌 시 프로덕트 우선
+$GENUT_HOME/products/&lt;이름&gt;/rules/   # 프로덕트 추가 규칙. 공통 뒤에 덧붙이며 충돌 시 프로덕트 우선
 ├── common.md
 ├── gtest.md
 └── kunit.md</code></pre>
@@ -1046,7 +1046,7 @@ max_context = 32768</code></pre>
 <summary><span class="n">10</span>스텁 도구 연동</summary>
 
 <h3>10.1 전제</h3>
-<p>gtest용과 KUnit용 <b>자체 스텁 도구가 각각 따로</b> 있습니다. 사용법은 사용자가 <code>gtest-stub.md</code>, <code>kunit-stub.md</code>로 제공하며, <b>GenUT를 셋업할 때 두 md가 모두 제공됩니다</b>. 공통 md는 <code>$GENUT_HOME/stub-tools/</code>에 두고, 프로덕트마다 다른 스텁 도구를 쓰면 <code>&lt;프로덕트 루트&gt;/.genut/stub-tools/</code>에 둔 것이 우선합니다(11.5). 개발 단계에서는 연동 지점만 정의하고 NoopStub으로 테스트하며, 어댑터 구현은 md를 받은 뒤 합니다.</p>
+<p>gtest용과 KUnit용 <b>자체 스텁 도구가 각각 따로</b> 있습니다. 사용법은 사용자가 <code>gtest-stub.md</code>, <code>kunit-stub.md</code>로 제공하며, <b>GenUT를 셋업할 때 두 md가 모두 제공됩니다</b>. 공통 md는 <code>$GENUT_HOME/stub-tools/</code>에 두고, 프로덕트마다 다른 스텁 도구를 쓰면 <code>$GENUT_HOME/products/&lt;이름&gt;/stub-tools/</code>에 둔 것이 우선합니다(11.5). 개발 단계에서는 연동 지점만 정의하고 NoopStub으로 테스트하며, 어댑터 구현은 md를 받은 뒤 합니다.</p>
 <p>두 스텁 도구 모두 <b>static 함수에 접근할 수 있습니다</b>. 따라서 static 대상 함수를 직접 호출하거나 static 호출 심볼을 스텁하는 방법은 GenUT가 따로 만들지 않고 스텁 도구에 맡깁니다. 구체적인 사용법(어떤 선언을 넣는지, 어떤 매크로를 쓰는지)은 md에서 가져와 describe()와 Test Writer 프롬프트에 넣습니다.</p>
 
 <h3>10.2 어댑터 인터페이스</h3>
@@ -1099,8 +1099,8 @@ max_context = 32768</code></pre>
 <p>모든 toml 설정은 CLI 플래그로 덮어쓸 수 있습니다: <code>--candidates 3 --max-iterations 6 --provider openai_compat --log-token-budget 6000</code>.</p>
 
 <h3>11.2 실행 기록 디렉터리</h3>
-<p><code>genut gen</code> 한 번마다 프로덕트의 .genut/runs/ 아래 하나씩 생깁니다. 나중에 무엇이든 되짚어 볼 수 있게 <b>모든 것</b>을 남깁니다.</p>
-<pre class="tree"><code>&lt;프로덕트 루트&gt;/.genut/runs/20261022-143012-rb_push/
+<p><code>genut gen</code> 한 번마다 프로덕트 폴더 <code>$GENUT_HOME/products/&lt;이름&gt;/runs/</code> 아래 하나씩 생깁니다. 프로덕트 소스 트리에는 최종 테스트 파일 외에 아무것도 쓰지 않습니다. 나중에 무엇이든 되짚어 볼 수 있게 <b>모든 것</b>을 남깁니다.</p>
+<pre class="tree"><code>$GENUT_HOME/products/&lt;이름&gt;/runs/20261022-143012-rb_push/
 ├── run.json             # 설정 스냅샷, provider/model, 규칙 md 해시, 결과 요약, 시간, 토큰
 ├── trace.jsonl          # 시간순 이벤트: 단계 시작/종료, 에이전트 호출, 도구 호출, 판정, 예산 상태
 ├── analysis.md          # 분석 보고서 (LLM에 들어간 그대로)
@@ -1165,7 +1165,7 @@ max_context = 32768</code></pre>
 <tr><th>파일</th><th>범위</th><th>내용</th></tr>
 <tr><td><code>rules/*.md</code></td><td>공통 + 프로덕트</td><td>사람의 규칙</td></tr>
 <tr><td><code>$GENUT_HOME/prompts/&lt;role&gt;.md</code></td><td>공통</td><td>역할별 프롬프트 템플릿 (없으면 패키지 기본값)</td></tr>
-<tr><td><code>$GENUT_HOME/knowledge/*.md</code>, <code>.genut/knowledge/product.md</code></td><td>공통 / 프로덕트</td><td>축적된 지식 노트</td></tr>
+<tr><td><code>$GENUT_HOME/knowledge/*.md</code>, <code>$GENUT_HOME/products/&lt;이름&gt;/knowledge/product.md</code></td><td>공통 / 프로덕트</td><td>축적된 지식 노트</td></tr>
 <tr><td><code>src/genut/verify/classify.yaml</code></td><td>패키지</td><td>실패 분류 패턴과 권장 전략</td></tr>
 <tr><td><code>src/genut/verify/logs/reduce.yaml</code></td><td>패키지</td><td>축약 우선순위, 제거 패턴, 토큰 상한</td></tr>
 <tr><td><code>src/genut/analysis/flag_sanitizer.yaml</code> + <code>$GENUT_HOME/knowledge/flag_sanitizer.learned.yaml</code></td><td>패키지 + 공통</td><td>커널 플래그 제거 목록</td></tr>
@@ -1178,7 +1178,7 @@ max_context = 32768</code></pre>
 <div class="tbl"><table>
 <tr><th>범위</th><th>위치</th><th>담는 것</th></tr>
 <tr><td><b>공통(global)</b></td><td><code>$GENUT_HOME/</code> (기본 <code>~/.genut/</code>)</td><td>LLM provider 설정, 예산 기본값, 공통 규칙, 역할 프롬프트 튜닝본, 공통 스텁 도구 md, 프로덕트 무관 지식, 실패 패턴→수정 사례, 커널 플래그 정제 학습 목록, 모델별 성공률 기준치</td></tr>
-<tr><td><b>프로덕트(product)</b></td><td><code>&lt;프로덕트 루트&gt;/.genut/</code></td><td>프로덕트 설정(백엔드, compile DB, 스크립트, test_file), 프로덕트 추가 규칙, 프로덕트 전용 스텁 md(있으면), 프로덕트 지식, 링크 범위·사전검증 캐시, 소스 버그 의심 목록, 실행 기록, 평가 코퍼스</td></tr>
+<tr><td><b>프로덕트(product)</b></td><td><code>$GENUT_HOME/products/&lt;이름&gt;/</code></td><td>프로덕트 설정(백엔드, compile DB, 스크립트, test_file), 프로덕트 추가 규칙, 프로덕트 전용 스텁 md(있으면), 프로덕트 지식, 링크 범위·사전검증 캐시, 소스 버그 의심 목록, 실행 기록, 평가 코퍼스</td></tr>
 </table></div>
 <pre class="tree"><code>$GENUT_HOME/
 ├── config.toml              # 공통 설정
@@ -1190,10 +1190,11 @@ max_context = 32768</code></pre>
 │   ├── global.md            # 프로덕트 무관 지식
 │   ├── fix_patterns.yaml    # 실패 분류+메시지 패턴 → 성공한 수정
 │   └── flag_sanitizer.learned.yaml
-└── evals/baselines/         # 모델별 기준 성공률
+├── evals/baselines/         # 모델별 기준 성공률
+└── products/&lt;이름&gt;/          # 프로덕트 폴더 (아래). 소스 트리 밖에 둔다
 
-&lt;프로덕트 루트&gt;/.genut/
-├── product.toml             # 프로덕트 설정
+$GENUT_HOME/products/&lt;이름&gt;/
+├── product.toml             # 프로덕트 설정 (소스 트리 루트 경로 포함)
 ├── rules/                   # 프로덕트 추가 규칙
 ├── stub-tools/              # 프로덕트 전용 스텁 md (있으면 공통 대신 사용)
 ├── knowledge/
@@ -1203,13 +1204,13 @@ max_context = 32768</code></pre>
 │   └── suspected_bugs.md
 ├── runs/
 └── evals/corpus/</code></pre>
-<p>프로덕트는 <code>genut product add &lt;이름&gt; --root &lt;경로&gt;</code>로 등록하고, <code>genut gen</code>은 현재 디렉터리가 속한 프로덕트를 자동으로 찾습니다(<code>--product</code>로 지정 가능).</p>
+<p>프로덕트는 <code>genut product add &lt;이름&gt; --root &lt;소스 트리 경로&gt;</code>로 등록합니다. 이때 <code>$GENUT_HOME/products/&lt;이름&gt;/</code>이 만들어지고 product.toml에 소스 트리 루트가 기록됩니다. <code>genut gen</code>은 현재 디렉터리가 등록된 소스 트리 중 어디에 속하는지로 프로덕트를 자동으로 찾습니다(<code>--product</code>로 지정 가능). 프로덕트 소스 트리 안에는 GenUT 파일을 두지 않으므로, 소스 저장소를 더럽히지 않고 여러 작업 트리에서 같은 프로덕트 정보를 공유합니다.</p>
 <figure class="fig"><svg viewBox="0 0 900 360" role="img" aria-label="공통과 프로덕트 저장소의 겹침. 공통 저장소와 프로덕트 A 저장소가 프로덕트 A 실행의 설정과 프롬프트로 합쳐지고, 프로덕트 B는 로드되지 않는다. Note Keeper가 쓴 노트는 범위 검증을 거쳐 프로덕트에 저장되고, 두 프로덕트에서 같은 노트가 나오면 공통으로 승격된다">
 <defs><marker id="arw8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
 <path d="M450,45 L450,22 L145,22 L145,43" class="ln dash" marker-end="url(#arw8)"/>
 <text x="297" y="14" text-anchor="middle" class="s">같은 노트가 2개 프로덕트에서 나오면 공통으로 승격 (genut knowledge promote)</text>
 <rect x="20" y="45" width="250" height="200" rx="8" class="pane"/>
-<text x="145" y="70" text-anchor="middle" class="t">$GENUT_HOME (공통)</text>
+<text x="145" y="70" text-anchor="middle" class="t">$GENUT_HOME (공통 영역)</text>
 <text x="34" y="95" class="s">config.toml · LLM, 예산 기본값</text>
 <text x="34" y="113" class="s">rules/ · 공통 규칙</text>
 <text x="34" y="131" class="s">prompts/ · 역할 프롬프트</text>
@@ -1219,7 +1220,7 @@ max_context = 32768</code></pre>
 <text x="34" y="203" class="s">evals/baselines/</text>
 
 <rect x="330" y="45" width="240" height="200" rx="8" class="hi"/>
-<text x="450" y="70" text-anchor="middle" class="t">프로덕트 A · .genut/</text>
+<text x="450" y="70" text-anchor="middle" class="t">products/A/ (프로덕트 A)</text>
 <text x="344" y="95" class="s">product.toml · 경로, 백엔드, 예산 덮어쓰기</text>
 <text x="344" y="113" class="s">rules/ · 추가 규칙</text>
 <text x="344" y="131" class="s">stub-tools/ · 있으면 공통 대신</text>
@@ -1229,7 +1230,7 @@ max_context = 32768</code></pre>
 <text x="344" y="203" class="s">runs/ · evals/corpus/</text>
 
 <rect x="630" y="45" width="240" height="200" rx="8" class="mute"/>
-<text x="750" y="70" text-anchor="middle" class="t">프로덕트 B · .genut/</text>
+<text x="750" y="70" text-anchor="middle" class="t">products/B/ (프로덕트 B)</text>
 <text x="644" y="95" class="s">product.toml</text>
 <text x="644" y="113" class="s">rules/</text>
 <text x="644" y="131" class="s">knowledge/product.md</text>
@@ -1249,7 +1250,7 @@ max_context = 32768</code></pre>
 <text x="745" y="336" text-anchor="middle" class="s">프로덕트 경로·심볼이 있으면 프로덕트로 강등</text>
 <path d="M640,300 L600,300 L600,215 L572,215" class="ln" marker-end="url(#arw8)"/>
 <text x="606" y="262" class="s" transform="rotate(-90 606,262)">노트 쓰기</text>
-</svg><figcaption>그림 8. 읽을 때는 공통 위에 프로덕트를 겹치고, 쓸 때는 프로덕트에 먼저 쌓은 뒤 여러 프로덕트에서 반복 확인된 것만 공통으로 올린다.</figcaption></figure>
+</svg><figcaption>그림 8. 세 폴더는 모두 $GENUT_HOME 아래에 있다. 읽을 때는 공통 위에 프로덕트를 겹치고, 쓸 때는 프로덕트에 먼저 쌓은 뒤 여러 프로덕트에서 반복 확인된 것만 공통으로 올린다.</figcaption></figure>
 <h4>읽을 때: 겹쳐 올리기</h4>
 <p>설정, 규칙, 지식 모두 <b>공통 → 프로덕트</b> 순으로 겹쳐 올립니다. 같은 항목이 양쪽에 있으면 프로덕트가 이깁니다.</p>
 <ul>
@@ -1352,9 +1353,10 @@ tool = "gcov"                     # "gcov" | "llvm-cov" (gtest 전용. KUnit은 
 [knowledge]
 auto_promote_after_products = 2   # 같은 노트가 몇 개 프로덕트에서 나오면 공통으로 승격
 </code></pre>
-<pre><code># &lt;프로덕트 루트&gt;/.genut/product.toml — 이 프로덕트 전용
+<pre><code># $GENUT_HOME/products/foo-driver/product.toml — 이 프로덕트 전용
 [product]
 name = "foo-driver"
+root = "/path/to/foo-driver"      # 소스 트리 루트. genut gen 은 현재 디렉터리가 이 아래면 자동 선택
 backend = "kunit"                 # "gtest" | "kunit"
 
 [gtest]
@@ -1464,7 +1466,7 @@ candidates = 3
 <tr><td>10</td><td>gtest 대상 언어</td><td>C 위주이나 C++도 있다. 자유 함수·static 멤버를 먼저, 인스턴스 멤버 함수는 12단계</td><td>6.3, 13장 12단계</td></tr>
 <tr><td>11</td><td>동시 실행</td><td>순차 실행. 병렬은 하지 않는다</td><td>11.1</td></tr>
 <tr><td>12</td><td>언어</td><td>리포트·뷰어·doctor 메시지·코드 주석 모두 한국어. 커밋 메시지는 CLAUDE.md에 따라 영어</td><td>CLAUDE.md</td></tr>
-<tr><td>13</td><td>여러 프로덕트 운영</td><td>공통 정보는 $GENUT_HOME, 프로덕트 정보는 &lt;루트&gt;/.genut/에 분리 저장. 읽을 때 공통→프로덕트 순으로 겹치고, 쓸 때는 범위 규칙과 Note Keeper 검증으로 섞이지 않게 한다</td><td>1장 원칙, 5.2, 10.1, 11.5, 12장, 13장 1·13단계</td></tr>
+<tr><td>13</td><td>여러 프로덕트 운영</td><td>공통 정보는 $GENUT_HOME, 프로덕트 정보는 $GENUT_HOME/products/&lt;이름&gt;/에 분리 저장. 프로덕트 소스 트리에는 테스트 파일 외에 아무것도 쓰지 않는다. 읽을 때 공통→프로덕트 순으로 겹치고, 쓸 때는 범위 규칙과 Note Keeper 검증으로 섞이지 않게 한다</td><td>1장 원칙, 5.2, 10.1, 11.5, 12장, 13장 1·13단계</td></tr>
 </table></div>
 </details>
 

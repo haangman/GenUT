@@ -2,7 +2,7 @@
 
 > 이 문서는 GenUT(Generate Unit Tests)의 설계를 설명합니다. C 코드나 테스트 도구를 잘 모르는 사람도 흐름을 이해할 수 있도록 썼고, 구현자가 그대로 따라 만들 수 있을 만큼 구체적으로 적었습니다. 코드 구현은 이 문서를 함께 검토하고 합의한 뒤에 시작합니다.
 
-**문서 버전**: 0.7 (초안, 2026-10-22)
+**문서 버전**: 0.8 (초안, 2026-10-22)
 **그림**: HTML 판(`docs/design.html`)에는 시스템 구성도, 흐름도, 에이전트 협업도, 검증 깔때기, 케이스 상태 머신, 로그 축약 파이프라인, 커버리지 루프, 공통/프로덕트 저장소 그림 8장이 들어 있습니다.
 **상태**: 검토 중
 
@@ -78,7 +78,7 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기
 [6/8] 수정      round 1: fix_case(test_rb_push_full) ✓ · drop_case(test_rb_push_null_buf: 소스 버그 의심)
 [7/8] 커버리지  라인 92% (27/29) → 미커버 :51 :63 → 케이스 1개 추가 → 100%
 [8/8] 리뷰      지적 0건
-완료  통과 6 · 제거 1 · 커버리지 100% · 소요 52s · 토큰 24k   → .genut/runs/20261022-143012-rb_push/
+완료  통과 6 · 제거 1 · 커버리지 100% · 소요 52s · 토큰 24k   → ~/.genut/products/ringbuf/runs/20261022-143012-rb_push/
 ```
 
 ### 핵심 설계 원칙 요약
@@ -280,7 +280,7 @@ $GENUT_HOME/rules/            # 공통: 모든 프로덕트에 적용
 ├── gtest.md     # gtest 전용. fixture 사용 여부, 매처 선호, 파일 위치
 └── kunit.md     # KUnit 전용. 메모리 규칙, 스위트/모듈 매크로
 
-<프로덕트 루트>/.genut/rules/   # 프로덕트 추가 규칙. 공통 뒤에 덧붙이며 충돌 시 프로덕트 우선
+$GENUT_HOME/products/<이름>/rules/   # 프로덕트 추가 규칙. 공통 뒤에 덧붙이며 충돌 시 프로덕트 우선
 ├── common.md
 ├── gtest.md
 └── kunit.md
@@ -754,7 +754,7 @@ max_context = 32768
 
 ### 10.1 전제
 
-gtest용과 KUnit용 **자체 스텁 도구가 각각 따로** 있습니다. 사용법은 사용자가 `gtest-stub.md`, `kunit-stub.md`로 제공하며, **GenUT를 셋업할 때 두 md가 모두 제공됩니다**. 공통 md는 `$GENUT_HOME/stub-tools/`에 두고, 프로덕트마다 다른 스텁 도구를 쓰면 `<프로덕트 루트>/.genut/stub-tools/`에 둔 것이 우선합니다(11.5). 개발 단계에서는 연동 지점만 정의하고 NoopStub으로 테스트하며, 어댑터 구현은 md를 받은 뒤 합니다.
+gtest용과 KUnit용 **자체 스텁 도구가 각각 따로** 있습니다. 사용법은 사용자가 `gtest-stub.md`, `kunit-stub.md`로 제공하며, **GenUT를 셋업할 때 두 md가 모두 제공됩니다**. 공통 md는 `$GENUT_HOME/stub-tools/`에 두고, 프로덕트마다 다른 스텁 도구를 쓰면 `$GENUT_HOME/products/<이름>/stub-tools/`에 둔 것이 우선합니다(11.5). 개발 단계에서는 연동 지점만 정의하고 NoopStub으로 테스트하며, 어댑터 구현은 md를 받은 뒤 합니다.
 
 두 스텁 도구 모두 **static 함수에 접근할 수 있습니다**. 따라서 static 대상 함수를 직접 호출하거나 static 호출 심볼을 스텁하는 방법은 GenUT가 따로 만들지 않고 스텁 도구에 맡깁니다. 구체적인 사용법(어떤 선언을 넣는지, 어떤 매크로를 쓰는지)은 md에서 가져와 `describe()`와 Test Writer 프롬프트에 넣습니다.
 
@@ -812,10 +812,10 @@ class StubAdapter(Protocol):
 
 ### 11.2 실행 기록 디렉터리
 
-`genut gen` 한 번마다 프로덕트의 `.genut/runs/` 아래 하나씩 생깁니다. 나중에 무엇이든 되짚어 볼 수 있게 **모든 것**을 남깁니다.
+`genut gen` 한 번마다 프로덕트 폴더 `$GENUT_HOME/products/<이름>/runs/` 아래 하나씩 생깁니다. 프로덕트 소스 트리에는 최종 테스트 파일 외에 아무것도 쓰지 않습니다. 나중에 무엇이든 되짚어 볼 수 있게 **모든 것**을 남깁니다.
 
 ```
-<프로덕트 루트>/.genut/runs/20261022-143012-rb_push/
+$GENUT_HOME/products/<이름>/runs/20261022-143012-rb_push/
 ├── run.json             # 설정 스냅샷, provider/model, 규칙 md 해시, 결과 요약, 시간, 토큰
 ├── trace.jsonl          # 시간순 이벤트: 단계 시작/종료, 에이전트 호출, 도구 호출, 판정, 예산 상태
 ├── analysis.md          # 분석 보고서 (LLM에 들어간 그대로)
@@ -891,7 +891,7 @@ flowchart LR
 |---|---|---|
 | `rules/*.md` | 공통 + 프로덕트 | 사람의 규칙 |
 | `$GENUT_HOME/prompts/<role>.md` | 공통 | 역할별 프롬프트 템플릿 (없으면 패키지 기본값) |
-| `$GENUT_HOME/knowledge/*.md`, `.genut/knowledge/product.md` | 공통 / 프로덕트 | 축적된 지식 노트 |
+| `$GENUT_HOME/knowledge/*.md`, `$GENUT_HOME/products/<이름>/knowledge/product.md` | 공통 / 프로덕트 | 축적된 지식 노트 |
 | `src/genut/verify/classify.yaml` | 패키지 | 실패 분류 패턴과 권장 전략 |
 | `src/genut/verify/logs/reduce.yaml` | 패키지 | 축약 우선순위, 제거 패턴, 토큰 상한 |
 | `src/genut/analysis/flag_sanitizer.yaml` + `$GENUT_HOME/knowledge/flag_sanitizer.learned.yaml` | 패키지 + 공통 | 커널 플래그 제거 목록 |
@@ -906,7 +906,7 @@ GenUT는 한 번 셋업하면 여러 프로덕트의 코드에 대해 테스트�
 | 범위 | 위치 | 담는 것 |
 |---|---|---|
 | **공통(global)** | `$GENUT_HOME/` (기본 `~/.genut/`) | LLM provider 설정, 예산 기본값, 공통 규칙, 역할 프롬프트 튜닝본, 공통 스텁 도구 md, 프로덕트 무관 지식, 실패 패턴→수정 사례, 커널 플래그 정제 학습 목록, 모델별 성공률 기준치 |
-| **프로덕트(product)** | `<프로덕트 루트>/.genut/` | 프로덕트 설정(백엔드, compile DB, 스크립트, test_file), 프로덕트 추가 규칙, 프로덕트 전용 스텁 md(있으면), 프로덕트 지식, 링크 범위·사전검증 캐시, 소스 버그 의심 목록, 실행 기록, 평가 코퍼스 |
+| **프로덕트(product)** | `$GENUT_HOME/products/<이름>/` | 프로덕트 설정(백엔드, compile DB, 스크립트, test_file), 프로덕트 추가 규칙, 프로덕트 전용 스텁 md(있으면), 프로덕트 지식, 링크 범위·사전검증 캐시, 소스 버그 의심 목록, 실행 기록, 평가 코퍼스 |
 
 ```
 $GENUT_HOME/
@@ -919,10 +919,11 @@ $GENUT_HOME/
 │   ├── global.md            # 프로덕트 무관 지식
 │   ├── fix_patterns.yaml    # 실패 분류+메시지 패턴 → 성공한 수정
 │   └── flag_sanitizer.learned.yaml
-└── evals/baselines/         # 모델별 기준 성공률
+├── evals/baselines/         # 모델별 기준 성공률
+└── products/<이름>/          # 프로덕트 폴더 (아래). 소스 트리 밖에 둔다
 
-<프로덕트 루트>/.genut/
-├── product.toml             # 프로덕트 설정
+$GENUT_HOME/products/<이름>/
+├── product.toml             # 프로덕트 설정 (소스 트리 루트 경로 포함)
 ├── rules/                   # 프로덕트 추가 규칙
 ├── stub-tools/              # 프로덕트 전용 스텁 md (있으면 공통 대신 사용)
 ├── knowledge/
@@ -934,7 +935,7 @@ $GENUT_HOME/
 └── evals/corpus/
 ```
 
-프로덕트는 `genut product add <이름> --root <경로>`로 등록하고, `genut gen`은 현재 디렉터리가 속한 프로덕트를 자동으로 찾습니다(`--product`로 지정 가능).
+프로덕트는 `genut product add <이름> --root <소스 트리 경로>`로 등록합니다. 이때 `$GENUT_HOME/products/<이름>/`이 만들어지고 `product.toml`에 소스 트리 루트가 기록됩니다. `genut gen`은 현재 디렉터리가 등록된 소스 트리 중 어디에 속하는지로 프로덕트를 자동으로 찾습니다(`--product`로 지정 가능). 프로덕트 소스 트리 안에는 GenUT 파일을 두지 않으므로, 소스 저장소를 더럽히지 않고 여러 작업 트리에서 같은 프로덕트 정보를 공유합니다.
 
 #### 읽을 때: 겹쳐 올리기
 
@@ -1044,9 +1045,10 @@ auto_promote_after_products = 2   # 같은 노트가 몇 개 프로덕트에서 
 ```
 
 ```toml
-# <프로덕트 루트>/.genut/product.toml — 이 프로덕트 전용
+# $GENUT_HOME/products/foo-driver/product.toml — 이 프로덕트 전용
 [product]
 name = "foo-driver"
+root = "/path/to/foo-driver"      # 소스 트리 루트. genut gen 은 현재 디렉터리가 이 아래면 자동 선택
 backend = "kunit"                 # "gtest" | "kunit"
 
 [gtest]
@@ -1158,4 +1160,4 @@ candidates = 3
 | 10 | gtest 대상 언어 | C 위주이나 C++도 있다. 자유 함수·static 멤버를 먼저, 인스턴스 멤버 함수는 12단계 | 6.3, 13장 12단계 |
 | 11 | 동시 실행 | 순차 실행. 병렬은 하지 않는다 | 11.1 |
 | 12 | 언어 | 리포트·뷰어·doctor 메시지·코드 주석 모두 한국어. 커밋 메시지는 CLAUDE.md에 따라 영어 | CLAUDE.md |
-| 13 | 여러 프로덕트 운영 | 공통 정보는 `$GENUT_HOME`, 프로덕트 정보는 `<루트>/.genut/`에 분리 저장. 읽을 때 공통→프로덕트 순으로 겹치고, 쓸 때는 범위 규칙과 Note Keeper 검증으로 섞이지 않게 한다 | 1장 원칙, 5.2, 10.1, 11.5, 12장, 13장 1·13단계 |
+| 13 | 여러 프로덕트 운영 | 공통 정보는 `$GENUT_HOME`, 프로덕트 정보는 `$GENUT_HOME/products/<이름>/`에 분리 저장. 프로덕트 소스 트리에는 테스트 파일 외에 아무것도 쓰지 않는다. 읽을 때 공통→프로덕트 순으로 겹치고, 쓸 때는 범위 규칙과 Note Keeper 검증으로 섞이지 않게 한다 | 1장 원칙, 5.2, 10.1, 11.5, 12장, 13장 1·13단계 |
