@@ -180,7 +180,7 @@ figure.fig figcaption { font-size: .85rem; color: var(--fg-muted); margin-top: 8
 
 <div class="topbar">
   <span class="brand">GenUT 설계 문서</span>
-  <span class="meta">v0.8 초안 · 2026-10-22 · 검토 중</span>
+  <span class="meta">v0.9 초안 · 2026-10-22 · 검토 중</span>
   <span class="spacer"></span>
   <button class="btn" id="btnAll" type="button">모두 접기</button>
   <button class="btn" id="btnTheme" type="button">테마 전환</button>
@@ -261,7 +261,7 @@ figure.fig figcaption { font-size: .85rem; color: var(--fg-muted); margin-top: 8
 <rect x="375" y="140" width="95" height="60" rx="6" class="bx"/>
 <text x="422" y="163" text-anchor="middle">검증기</text><text x="422" y="180" text-anchor="middle" class="s">진단·분류·축약</text>
 <rect x="480" y="140" width="150" height="60" rx="6" class="bx"/>
-<text x="555" y="163" text-anchor="middle">에이전트 5역할</text><text x="555" y="180" text-anchor="middle" class="s">분석·스텁·작성·수정·리뷰</text>
+<text x="555" y="163" text-anchor="middle">에이전트 6역할</text><text x="555" y="180" text-anchor="middle" class="s">LLM 역할 6개 (4장, 그림 3-1)</text>
 <rect x="270" y="220" width="360" height="40" rx="6" class="bx"/>
 <text x="450" y="238" text-anchor="middle">공유 상태 (블랙보드)</text><text x="450" y="253" text-anchor="middle" class="s">분석 보고서 · 스텁 · 케이스 상태 · 진단 · 시도 이력</text>
 <rect x="270" y="300" width="170" height="60" rx="6" class="bx"/>
@@ -429,6 +429,98 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기</code><
   <li>프롬프트 하나를 고치면 다른 부분이 망가진다.</li>
 </ul>
 <p>역할을 나누면 각 에이전트는 <b>작은 입력을 받아 정해진 형식의 작은 출력</b>을 냅니다. 입력과 출력은 모두 구조화(JSON 스키마)되어 있어 코드가 검증하고 기록할 수 있습니다.</p>
+<p>정리하면 GenUT는 <b>LLM 에이전트 여섯 개</b>(Analyzer, Stub Planner, Test Writer, Fixer, Reviewer, Note Keeper)와 <b>LLM이 아닌 오케스트레이터</b>로 이루어진 멀티 에이전트 구조입니다. 에이전트끼리 자유롭게 대화하는 방식이 아니라, 오케스트레이터가 단계마다 필요한 에이전트만 부르고 결과를 공유 상태(블랙보드)에 쌓아 다음 에이전트에게 넘기는 <b>파이프라인 + 블랙보드</b> 방식입니다. 그래서 어느 에이전트가 무엇을 받고 무엇을 냈는지 항상 기록에 남고, Gemma 4처럼 긴 대화에 약한 모델에서도 안정적으로 동작합니다.</p>
+<figure class="fig"><svg viewBox="0 0 920 770" role="img" aria-label="여섯 LLM 에이전트와 호출 시점. 위 표는 각 에이전트가 8단계 중 어디서 불리는지, 아래 카드는 각 에이전트가 받는 입력과 내는 출력, 지켜야 할 제약을 보여 준다. 오케스트레이터는 LLM이 아니며 모든 단계를 진행한다">
+<defs><marker id="arw9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+<text x="20" y="30" class="t">호출 시점</text>
+<rect x="160" y="40" width="720" height="34" rx="6" class="hi"/>
+<text x="520" y="54" text-anchor="middle" class="t">오케스트레이터 (코드, LLM 아님) — 모든 단계를 진행하고 아래 에이전트를 부른다</text>
+<text x="520" y="68" text-anchor="middle" class="s">③ 사전검증은 에이전트 없이 코드만 돈다</text>
+<rect x="160" y="84" width="76" height="26" rx="4" class="bx"/>
+<text x="198" y="101" text-anchor="middle" class="s">① 분석</text>
+<rect x="240" y="84" width="76" height="26" rx="4" class="bx"/>
+<text x="278" y="101" text-anchor="middle" class="s">② 스텁</text>
+<rect x="320" y="84" width="76" height="26" rx="4" class="bx"/>
+<text x="358" y="101" text-anchor="middle" class="s">③ 사전검증</text>
+<rect x="400" y="84" width="76" height="26" rx="4" class="bx"/>
+<text x="438" y="101" text-anchor="middle" class="s">④ 스모크</text>
+<rect x="480" y="84" width="76" height="26" rx="4" class="bx"/>
+<text x="518" y="101" text-anchor="middle" class="s">⑤ 확장</text>
+<rect x="560" y="84" width="76" height="26" rx="4" class="bx"/>
+<text x="598" y="101" text-anchor="middle" class="s">⑥ 수정</text>
+<rect x="640" y="84" width="76" height="26" rx="4" class="bx"/>
+<text x="678" y="101" text-anchor="middle" class="s">⑦ 커버리지</text>
+<rect x="720" y="84" width="76" height="26" rx="4" class="bx"/>
+<text x="758" y="101" text-anchor="middle" class="s">⑧ 리뷰</text>
+<rect x="800" y="84" width="76" height="26" rx="4" class="ok"/>
+<text x="838" y="101" text-anchor="middle" class="s">종료 후</text>
+<rect x="20" y="110" width="130" height="28" rx="6" class="bx"/>
+<text x="85" y="129" text-anchor="middle" class="t">Analyzer</text>
+<line x1="160" y1="128" x2="880" y2="128" class="ln dash" style="opacity:.35"/>
+<circle cx="198" cy="128" r="8" class="hi"/>
+<circle cx="678" cy="128" r="8" class="hi"/>
+<rect x="20" y="146" width="130" height="28" rx="6" class="bx"/>
+<text x="85" y="165" text-anchor="middle" class="t">Stub Planner</text>
+<line x1="160" y1="164" x2="880" y2="164" class="ln dash" style="opacity:.35"/>
+<circle cx="278" cy="164" r="8" class="hi"/>
+<circle cx="598" cy="164" r="8" class="hi"/>
+<rect x="20" y="182" width="130" height="28" rx="6" class="bx"/>
+<text x="85" y="201" text-anchor="middle" class="t">Test Writer</text>
+<line x1="160" y1="200" x2="880" y2="200" class="ln dash" style="opacity:.35"/>
+<circle cx="438" cy="200" r="8" class="hi"/>
+<circle cx="518" cy="200" r="8" class="hi"/>
+<circle cx="678" cy="200" r="8" class="hi"/>
+<rect x="20" y="218" width="130" height="28" rx="6" class="bx"/>
+<text x="85" y="237" text-anchor="middle" class="t">Fixer</text>
+<line x1="160" y1="236" x2="880" y2="236" class="ln dash" style="opacity:.35"/>
+<circle cx="598" cy="236" r="8" class="hi"/>
+<rect x="20" y="254" width="130" height="28" rx="6" class="bx"/>
+<text x="85" y="273" text-anchor="middle" class="t">Reviewer</text>
+<line x1="160" y1="272" x2="880" y2="272" class="ln dash" style="opacity:.35"/>
+<circle cx="758" cy="272" r="8" class="hi"/>
+<rect x="20" y="290" width="130" height="28" rx="6" class="bx"/>
+<text x="85" y="309" text-anchor="middle" class="t">Note Keeper</text>
+<line x1="160" y1="308" x2="880" y2="308" class="ln dash" style="opacity:.35"/>
+<circle cx="838" cy="308" r="8" class="hi"/>
+<text x="20" y="352" class="t">무엇을 하나</text>
+<text x="20" y="370" class="s"><tspan class="t">Analyzer:</tspan>  분석 보고서 보강 · 테스트 가능성 · 도달 불가 분류</text>
+<text x="20" y="387" class="s"><tspan class="t">Stub Planner:</tspan>  스텁 대상 결정 (add_stub 전략 때 재호출)</text>
+<text x="20" y="404" class="s"><tspan class="t">Test Writer:</tspan>  케이스 작성 · 확장 · 커버리지용 케이스 추가</text>
+<text x="20" y="421" class="s"><tspan class="t">Fixer:</tspan>  실패 분류에 맞춰 전략 선택 · 케이스 재작성</text>
+<text x="20" y="438" class="s"><tspan class="t">Reviewer:</tspan>  규칙 준수 · 무의미 단정 · 단정 약화 검출</text>
+<text x="20" y="455" class="s"><tspan class="t">Note Keeper:</tspan>  다음 실행에 도움이 될 노트 + 범위 제안</text>
+<rect x="20" y="500" width="430" height="76" rx="6" class="bx"/>
+<text x="30" y="517" class="t">Analyzer</text>
+<text x="30" y="534" class="s">입력: 코드가 만든 분석 보고서</text>
+<text x="30" y="550" class="s">출력: 테스트 가능 여부 · 주의점 · 추천 케이스</text>
+<text x="30" y="566" class="s">금지: 보고서에 없는 사실을 지어내기</text>
+<rect x="470" y="500" width="430" height="76" rx="6" class="bx"/>
+<text x="480" y="517" class="t">Stub Planner</text>
+<text x="480" y="534" class="s">입력: 호출 심볼 + 링크 범위 판정 + 스텁 도구 md</text>
+<text x="480" y="550" class="s">출력: 스텁할 심볼 목록과 기본 동작(반환값)</text>
+<text x="480" y="566" class="s">필수: undefined · must_stub 심볼 전부 포함</text>
+<rect x="20" y="586" width="430" height="76" rx="6" class="bx"/>
+<text x="30" y="603" class="t">Test Writer</text>
+<text x="30" y="620" class="s">입력: 보고서 + 스텁 사용법 + 규칙 + 지식 + 통과 케이스</text>
+<text x="30" y="636" class="s">출력: 케이스 목록 (이름 · 목적 · 소스)</text>
+<text x="30" y="652" class="s">금지: 통과한 케이스를 한 글자라도 바꾸기</text>
+<rect x="470" y="586" width="430" height="76" rx="6" class="bx"/>
+<text x="480" y="603" class="t">Fixer</text>
+<text x="480" y="620" class="s">입력: 실패 케이스 + 분류 + 축약 진단/크래시 브리프</text>
+<text x="480" y="636" class="s">출력: 전략(열거형) + 사유 + 새 케이스 소스</text>
+<text x="480" y="652" class="s">금지: 단정을 지우거나 약화해 통과시키기</text>
+<rect x="20" y="672" width="430" height="76" rx="6" class="bx"/>
+<text x="30" y="689" class="t">Reviewer</text>
+<text x="30" y="706" class="s">입력: 최종 테스트 파일 + 규칙 + 수정 이력</text>
+<text x="30" y="722" class="s">출력: 지적 목록 (케이스 · 위반 종류 · 근거)</text>
+<text x="30" y="738" class="s">검사: 커버리지용 케이스에 단정이 있는지</text>
+<rect x="470" y="672" width="430" height="76" rx="6" class="bx"/>
+<text x="480" y="689" class="t">Note Keeper</text>
+<text x="480" y="706" class="s">입력: 실행 기록 요약 (판정 · 실패 · 수정 결과)</text>
+<text x="480" y="722" class="s">출력: 노트 + scope(global | product) + 근거</text>
+<text x="480" y="738" class="s">검증: 프로덕트 식별자가 있으면 프로덕트로 강등</text>
+</svg><figcaption>그림 3-1. 만들어지는 에이전트 여섯과 호출 시점. 에이전트는 서로 직접 대화하지 않고, 오케스트레이터가 단계마다 필요한 에이전트만 불러 공유 상태를 통해 결과를 넘긴다.</figcaption></figure>
+
 
 <figure class="fig"><svg viewBox="0 0 900 420" role="img" aria-label="에이전트 협업도. 오케스트레이터가 왼쪽의 여섯 에이전트에게 구조화 입력과 출력 스키마를 주고 JSON을 받으며, 오른쪽의 도구에서 사실을 모아 가운데 공유 상태에 쌓는다. 에이전트는 도구를 직접 호출하지 않는다">
 <defs><marker id="arw3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
@@ -474,8 +566,9 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기</code><
 <text x="450" y="300" text-anchor="middle" class="acc">LLM은 도구를 직접 호출하지 않는다.</text>
 <text x="450" y="320" text-anchor="middle" class="s">오케스트레이터가 도구로 사실을 모아 에이전트에게 좁은 질문을 던지고,</text>
 <text x="450" y="337" text-anchor="middle" class="s">답을 블랙보드에 쌓은 뒤 다음 행동을 코드로 정한다.</text>
-</svg><figcaption>그림 3. 에이전트 협업 구조. 에이전트는 LLM Provider를 통해서만 생각하고, 도구는 오케스트레이터만 호출한다. 둘의 입력과 출력은 모두 공유 상태에 기록된다.</figcaption></figure>
+</svg><figcaption>그림 3-2. 에이전트 협업 구조. 에이전트는 LLM Provider를 통해서만 생각하고, 도구는 오케스트레이터만 호출한다. 둘의 입력과 출력은 모두 공유 상태에 기록된다.</figcaption></figure>
 <h3>4.2 역할 목록</h3>
+<p>각 역할이 받는 것과 내는 것, 지켜야 할 것입니다. 호출 시점은 그림 3-1, 오케스트레이터·도구와의 관계는 그림 3-2를 보세요.</p>
 <div class="tbl"><table>
 <tr><th>역할</th><th>받는 것</th><th>내는 것</th><th>지켜야 할 것</th></tr>
 <tr><td><b>Analyzer</b></td><td>코드가 만든 분석 보고서</td><td>테스트 가능 여부, 주의 사항(예: "두 번째 인자는 반드시 정렬된 배열"), 추천 케이스 목록</td><td>보고서에 없는 사실을 지어내지 않는다. 불확실하면 "확인 필요"로 표시</td></tr>
@@ -483,6 +576,7 @@ genut view latest        # HTML 뷰어 생성 후 브라우저로 열기</code><
 <tr><td><b>Test Writer</b></td><td>분석 보고서 + 스텁 사용법 + 규칙 md + (확장 단계에서) 현재 통과 케이스</td><td>테스트 케이스 목록(이름, 목적, 소스)</td><td>규칙 md 준수. 통과 케이스는 글자 하나 바꾸지 않는다. 케이스는 서로 독립</td></tr>
 <tr><td><b>Fixer</b></td><td>실패 케이스 소스 + 분류 결과 + 축약 진단/크래시 브리프 + 권장 전략</td><td>전략(열거형) + 이유 + 새 케이스 소스</td><td>열거된 전략만 선택. 단정을 지워서 통과시키지 않는다. 소스 버그가 의심되면 drop_case와 함께 사유를 적는다</td></tr>
 <tr><td><b>Reviewer</b></td><td>최종 테스트 파일 + 규칙 md + 수정 이력</td><td>지적 목록(케이스, 규칙 위반/무의미 단정/단정 무력화, 설명)</td><td>지적은 구체적 근거와 함께. 통과를 위해 단정이 약화된 흔적을 찾는다</td></tr>
+<tr><td><b>Note Keeper</b></td><td>실행 기록 요약(판정, 실패 분류, 수정 결과)</td><td>다음 실행에 도움이 될 노트 + 범위(global/product) + 근거</td><td>프로덕트 경로·심볼이 있으면 프로덕트 범위. 한 문장씩, 근거 실행 ID 포함 (11.5)</td></tr>
 <tr><td><b>Orchestrator</b></td><td colspan="2">(LLM 아님) 위 에이전트를 순서대로 호출하고 예산을 관리하는 Python 코드</td><td></td></tr>
 </table></div>
 
