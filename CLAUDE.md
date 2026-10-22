@@ -29,4 +29,20 @@ GenUT는 C/C++ 소스 코드를 분석하여 단위 테스트를 자동 생성�
 
 ## 빌드 및 테스트 명령
 
-_(아직 정해지지 않음. 빌드 시스템과 테스트 러너가 확정되면 여기에 기록할 것.)_
+Python 3.11+ 패키지이며 가상환경은 `uv`로 만든다.
+
+```bash
+uv venv .venv                      # 처음 한 번
+uv pip install --python .venv -e ".[dev]"
+.venv/Scripts/python -m pytest -q  # 전체 테스트 (Linux/macOS: .venv/bin/python)
+.venv/Scripts/genut --help         # CLI
+```
+
+- 통합 테스트(`@pytest.mark.integration`)는 cmake·C/C++ 컴파일러·gtest가 없으면 자동으로 건너뛴다.
+- libclang이 필요한 테스트(`@pytest.mark.libclang`)는 libclang을 불러오지 못하면 건너뛴다.
+
+## 구조
+
+- `docs/design.md`, `docs/design.html`: 설계 문서 (구현의 기준)
+- `src/genut/`: 패키지. 하위 패키지는 `analysis`(정적 분석), `verify`(진단·분류·로그 축약), `llm`(provider·구조화 출력·프롬프트 조립), `agents`(역할별 에이전트), `backends`(gtest·KUnit), `viewer`(HTML 뷰어)
+- `tests/unit`: 외부 도구 없이 도는 단위 테스트, `tests/fixtures`: 고정 픽스처

@@ -1,0 +1,41 @@
+# $GENUT_HOME/config.toml — 모든 프로덕트 공통 설정 (설계 12장)
+# 값을 지우면 내장 기본값이 쓰입니다. 프로덕트별 값은 products/<이름>/product.toml에 둡니다.
+
+[llm]
+provider = "anthropic"            # "anthropic" | "openai_compat" | "fake"
+model = "claude-sonnet-5-5"
+temperature = 0.2
+prompt_language = "en"            # 역할 지시문 언어. 규칙 md는 한국어 그대로 삽입
+code_format = "json"              # "json" | "fenced"
+
+[llm.anthropic]
+api_key_env = "ANTHROPIC_API_KEY"
+
+[llm.openai_compat]
+base_url = "http://gemma4.internal/v1"
+model = "gemma-4-12b"
+api_key_env = "GENUT_LLM_KEY"
+max_context = 32768
+supports_json_schema = true
+supports_n = false
+
+[llm.context]
+output_reserve_tokens = 6000
+context_safety_margin = 0.05
+token_counter = "estimate"
+
+# [budget] 의 기본값은 백엔드에 따라 다릅니다(KUnit은 빌드가 느려 더 작게 잡음).
+# 공통으로 바꾸고 싶은 값만 주석을 풀어 쓰세요.
+[budget]
+# candidates = 1
+# max_iterations = 4
+# max_case_fixes = 2
+# max_tokens_per_function = 300000
+# max_coverage_rounds = 3
+
+[coverage]
+enabled = true
+target_line_percent = 100
+
+[knowledge]
+auto_promote_after_products = 2
