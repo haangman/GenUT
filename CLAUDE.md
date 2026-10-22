@@ -9,7 +9,7 @@ GenUT는 C/C++ 소스 코드를 분석하여 단위 테스트를 자동 생성�
 - 유저 스페이스 코드 대상: **GoogleTest (gtest)** 테스트 생성
 - 리눅스 커널 코드 대상: **KUnit** 테스트 생성
 
-libclang 정적 분석으로 함수 구조를 뽑고, 역할별 LLM 에이전트가 테스트를 쓰고 고치며, 코드가 직접 빌드·실행해 통과한 케이스만 남깁니다. 구현의 기준은 `docs/design.md`이고, 모듈 docstring의 `(설계 7.4)` 같은 표기는 이 문서의 절 번호입니다. 사용자가 만드는 KUnit 실행 스크립트의 계약은 `docs/kunit-script.md`에 있습니다.
+libclang 정적 분석으로 함수 구조를 뽑고, 역할별 LLM 에이전트가 테스트를 쓰고 고치며, 코드가 직접 빌드·실행해 통과한 케이스만 남깁니다. 구현의 기준은 `docs/design.md`이고, 사용자용 설명은 `docs/guide.md`(HTML 판 `docs/guide.html`)에 있으며, 모듈 docstring의 `(설계 7.4)` 같은 표기는 이 문서의 절 번호입니다. 사용자가 만드는 KUnit 실행 스크립트의 계약은 `docs/kunit-script.md`에 있습니다.
 
 ## 필수 작업 규칙
 
@@ -79,6 +79,7 @@ uv pip install --python .venv -e ".[dev]"
 - **언어**(설계 결정 12): CLI 도움말·오류·doctor 메시지·리포트·뷰어 등 사용자에게 보이는 문자열과 코드 주석·docstring은 한국어로, 커밋 메시지만 영어로 쓴다. 규칙 md는 한국어이고, LLM 역할 지시문은 영어가 기본이다(`llm.prompt_language`).
 - **인코딩**: 파일을 읽고 쓸 때는 항상 `encoding="utf-8"`을 명시한다. 개발 환경이 한국어 Windows(기본 cp949)라 생략하면 깨진다. `.gitattributes`가 텍스트 파일을 LF로 고정한다. 경로 포함 판정은 `paths.is_relative_to`를 쓴다(Windows 대소문자 무시).
 - **설계 문서**: `docs/design.md`를 고치면 그림이 든 HTML 판 `docs/design.html`도 같은 커밋에서 맞춘다.
+- **사용 가이드**: `docs/guide.md`(구조·동작·셋업·명령·디버깅·튜닝)와 그림이 든 `docs/guide.html`은 함께 고친다. 예시 출력은 샘플 프로젝트로 `genut`을 실제로 돌린 결과(LLM만 fake 스크립트)이므로, CLI 출력·실행 기록 형식·설정 키를 바꾸면 가이드의 해당 예시와 표도 맞춘다.
 - **코드 수정 없이 바꾸는 데이터 파일**: 실패 분류 패턴은 `verify/classify.yaml`(위에서부터 처음 맞는 규칙), gcc 플래그 제거 목록은 `analysis/flag_sanitizer.yaml`, `genut init`이 복사하는 기본값은 `templates/`. 규칙 md의 `## 반드시 스텁`, `## 리뷰에서 거부할 패턴` 제목은 `rules.py`가 파싱하므로 바꾸지 않는다.
 - **데이터 정책**(설계 9.1): 외부 API(Claude)로는 샘플·평가 코퍼스만 처리하고, 실제 프로덕트 코드는 사내 Gemma 4로만 처리한다.
 

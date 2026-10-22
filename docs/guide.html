@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GenUT 사용 가이드</title>
+<style>
+/* design.html과 같은 토큰·레이아웃: 왼쪽 목차, 접는 절, 테마 전환. 그림은 테마 토큰을 따르는 인라인 SVG. */
+:root {
+  --bg: #f6f8f8; --surface: #ffffff; --surface-2: #eef2f2; --fg: #1d2628; --fg-muted: #5b6b6e; --line: #d6dedf;
+  --accent: #0f6e7a; --accent-soft: #d9eef0; --ok: #2e7d4f; --ok-soft: #dff3e6; --warn: #9a6400; --warn-soft: #fbefd4;
+  --bad: #b3372b; --bad-soft: #f9e1dd; --code-bg: #f0f3f3; --term-bg: #18211f; --term-fg: #dfe9e6; --term-dim: #8fa5a0;
+  --font-body: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", "D2Coding", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131a1b; --surface: #1a2325; --surface-2: #212c2e; --fg: #e4eaeb; --fg-muted: #9aabae; --line: #2e3c3f;
+    --accent: #5cc3cf; --accent-soft: #163b40; --ok: #6fcf97; --ok-soft: #1c3b2a; --warn: #e6b45a; --warn-soft: #3d2f12;
+    --bad: #f08a7d; --bad-soft: #43221e; --code-bg: #0f1516; --term-bg: #0b1011; --term-fg: #dfe9e6; --term-dim: #8fa5a0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131a1b; --surface: #1a2325; --surface-2: #212c2e; --fg: #e4eaeb; --fg-muted: #9aabae; --line: #2e3c3f;
+  --accent: #5cc3cf; --accent-soft: #163b40; --ok: #6fcf97; --ok-soft: #1c3b2a; --warn: #e6b45a; --warn-soft: #3d2f12;
+  --bad: #f08a7d; --bad-soft: #43221e; --code-bg: #0f1516; --term-bg: #0b1011; --term-fg: #dfe9e6; --term-dim: #8fa5a0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.topbar { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-block: 10px; margin-bottom: 24px; }
+.topbar .brand { font-weight: 700; letter-spacing: .02em; }
+.topbar .meta { color: var(--fg-muted); font-size: .85rem; }
+.topbar .spacer { flex: 1; }
+.btn { font: inherit; font-size: .85rem; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.wrap { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 36px; max-width: 1240px; margin: 0 auto; }
+nav.toc { position: sticky; top: 64px; align-self: start; max-height: calc(100vh - 80px); overflow: auto; font-size: .9rem; }
+nav.toc .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-muted); margin-bottom: 8px; }
+nav.toc ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
+nav.toc ol ol { padding-left: 18px; font-size: .84rem; }
+nav.toc a { display: block; padding: 3px 8px; border-radius: 4px; color: var(--fg); }
+nav.toc a:hover { background: var(--surface-2); text-decoration: none; }
+nav.toc a .n { color: var(--fg-muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+main { min-width: 0; max-width: 940px; }
+@media (max-width: 960px) { .wrap { grid-template-columns: 1fr; gap: 16px; } nav.toc { position: static; max-height: none; } }
+h1 { font-size: 2rem; line-height: 1.25; margin: 0 0 8px; text-wrap: balance; }
+.lede { color: var(--fg-muted); font-size: 1.05rem; margin: 0 0 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 20px; }
+.chip { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: .78rem; font-weight: 600; border: 1px solid var(--line); background: var(--surface); }
+.chip.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.chip.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.chip.bad { color: var(--bad); background: var(--bad-soft); border-color: transparent; }
+.chip.accent { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+details.sec { border-top: 1px solid var(--line); padding-block: 8px 20px; }
+details.sec > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 12px; font-size: 1.45rem; font-weight: 700; padding-block: 12px; text-wrap: balance; }
+details.sec > summary::-webkit-details-marker { display: none; }
+details.sec > summary .n { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 1rem; font-weight: 700; min-width: 2ch; }
+details.sec > summary::after { content: "펼치기"; margin-left: auto; font-size: .78rem; font-weight: 500; color: var(--fg-muted); }
+details.sec[open] > summary::after { content: "접기"; }
+h3 { font-size: 1.15rem; margin: 30px 0 8px; }
+h4 { font-size: 1rem; margin: 20px 0 6px; }
+p { margin: 0 0 12px; }
+ul, ol { margin: 0 0 12px; padding-left: 22px; }
+li { margin-bottom: 4px; }
+.tbl { overflow-x: auto; margin: 0 0 16px; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { text-align: left; vertical-align: top; padding: 7px 11px; border-bottom: 1px solid var(--line); }
+th { background: var(--surface-2); font-weight: 600; font-size: .8rem; letter-spacing: .02em; }
+tr:last-child td { border-bottom: 0; }
+td code, p code, li code, th code, summary code, .io code, .callout code { font-family: var(--font-mono); font-size: .86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { font-family: var(--font-mono); font-size: .8rem; line-height: 1.5; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 0 0 16px; }
+pre code { background: none; padding: 0; }
+pre.term { background: var(--term-bg); color: var(--term-fg); border-color: transparent; }
+.callout { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 8px; padding: 10px 14px; margin: 0 0 16px; }
+.callout.warn { border-left-color: var(--warn); }
+.callout.ok { border-left-color: var(--ok); }
+.callout p:last-child { margin: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin: 0 0 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.card b { display: block; margin-bottom: 2px; }
+.card span { color: var(--fg-muted); font-size: .9rem; }
+/* 단계 카드 */
+.step { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px 16px 6px; margin: 0 0 18px; }
+.step > .head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 6px; }
+.step > .head .num { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: .9rem; flex: none; }
+.step > .head b { font-size: 1.05rem; }
+.step > .head .who { color: var(--fg-muted); font-size: .85rem; }
+.step .line { font-family: var(--font-mono); font-size: .8rem; background: var(--term-bg); color: var(--term-fg); border-radius: 6px; padding: 4px 10px; margin: 0 0 8px; overflow-x: auto; white-space: pre; }
+.io { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin: 0 0 10px; }
+.io > div { background: var(--surface-2); border-radius: 6px; padding: 6px 10px; font-size: .88rem; min-width: 0; }
+.io > div > b { display: block; font-size: .72rem; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
+details.art { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 10px; background: var(--surface); }
+details.art > summary { cursor: pointer; padding: 6px 12px; font-size: .88rem; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+details.art > summary .f { font-family: var(--font-mono); font-size: .82rem; color: var(--accent); font-weight: 600; }
+details.art > summary .d { color: var(--fg-muted); font-size: .82rem; }
+details.art > pre { margin: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0 0 8px 8px; max-height: 560px; overflow: auto; }
+.tree { font-family: var(--font-mono); font-size: .8rem; }
+.layers { display: grid; gap: 6px; margin: 0 0 16px; }
+.layer { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--surface); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: .92rem; }
+.layer.hi { background: var(--accent-soft); border-color: transparent; }
+.layer span { color: var(--fg-muted); font-size: .85rem; }
+.ladder { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 16px; font-family: var(--font-mono); font-size: .84rem; }
+.ladder .s { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); }
+.ladder .s small { display: block; font-family: var(--font-body); color: var(--fg-muted); font-size: .72rem; }
+.ladder .a { color: var(--fg-muted); }
+/* 그림 */
+figure.fig { margin: 14px 0 22px; }
+figure.fig .scroll { overflow-x: auto; }
+figure.fig svg { display: block; width: 100%; min-width: 640px; height: auto; color: var(--fg); font-family: var(--font-body); }
+figure.fig figcaption { font-size: .85rem; color: var(--fg-muted); margin-top: 8px; }
+.fig .bx { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+.fig .pane { fill: var(--surface-2); stroke: var(--line); stroke-width: 1; }
+.fig .hi { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+.fig .ok { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.2; }
+.fig .bad { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.2; }
+.fig .warn { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.2; }
+.fig .mute { fill: var(--surface-2); stroke: var(--line); stroke-dasharray: 4 3; }
+.fig .ln { fill: none; stroke: currentColor; stroke-width: 1.3; }
+.fig .ln.dash { stroke-dasharray: 5 4; }
+.fig .ln.acc { stroke: var(--accent); }
+.fig .ln.badl { stroke: var(--bad); }
+.fig text { font-size: 12px; fill: currentColor; }
+.fig .t { font-weight: 600; }
+.fig .s { font-size: 11px; fill: var(--fg-muted); }
+.fig .m { font-family: var(--font-mono); font-size: 10.5px; }
+.fig .ms { font-family: var(--font-mono); font-size: 10px; fill: var(--fg-muted); }
+.fig .acct { fill: var(--accent); font-weight: 600; }
+.fig .okt { fill: var(--ok); font-weight: 600; }
+.fig .badt { fill: var(--bad); font-weight: 600; }
+.fig .warnt { fill: var(--warn); font-weight: 600; }
+.fig .ah { fill: currentColor; }
+.fig .ah.acc { fill: var(--accent); }
+.fig .ah.badf { fill: var(--bad); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .82rem; color: var(--fg-muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; border: 1px solid var(--line); }
+.legend i.ok { background: var(--ok-soft); border-color: var(--ok); } .legend i.bad { background: var(--bad-soft); border-color: var(--bad); }
+.legend i.warn { background: var(--warn-soft); border-color: var(--warn); } .legend i.hi { background: var(--accent-soft); border-color: var(--accent); }
+.legend i.mute { background: var(--surface-2); border-style: dashed; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="brand">GenUT 사용 가이드</span>
+  <span class="meta">구조 · 동작 · 셋업 · 사용법 · 디버깅 · 튜닝 — 실제 실행 예시 포함</span>
+  <span class="spacer"></span>
+  <button class="btn" id="btnAll" type="button">모두 접기</button>
+  <button class="btn" id="btnTheme" type="button">테마 전환</button>
+</div>
+
+<div class="wrap">
+<nav class="toc" aria-label="목차">
+  <div class="label">목차</div>
+  <ol>
+    <li><a href="#s1"><span class="n">1</span>한눈에 보기</a></li>
+    <li><a href="#s2"><span class="n">2</span>구조</a></li>
+    <li><a href="#s3"><span class="n">3</span>동작: 8단계</a></li>
+    <li><a href="#s4"><span class="n">4</span>환경 셋업</a></li>
+    <li><a href="#s5"><span class="n">5</span>명령어 사용법</a></li>
+    <li><a href="#s6"><span class="n">6</span>따라 하기: gtest</a>
+      <ol>
+        <li><a href="#w-timeline">빌드 타임라인</a></li>
+        <li><a href="#w1">① 분석</a></li>
+        <li><a href="#w4">④ 스모크</a></li>
+        <li><a href="#w5">⑤ 확장</a></li>
+        <li><a href="#w6">⑥ 수정</a></li>
+        <li><a href="#w7">⑦ 커버리지</a></li>
+        <li><a href="#w9">최종 확인·설치</a></li>
+        <li><a href="#w10">노트·결과 보기</a></li>
+        <li><a href="#w11">실행 기록 전체</a></li>
+      </ol>
+    </li>
+    <li><a href="#s7"><span class="n">7</span>따라 하기: KUnit</a></li>
+    <li><a href="#s8"><span class="n">8</span>디버깅</a></li>
+    <li><a href="#s9"><span class="n">9</span>튜닝</a></li>
+    <li><a href="#s10"><span class="n">10</span>알려진 한계</a></li>
+    <li><a href="#sa"><span class="n">A</span>설정 레퍼런스</a></li>
+    <li><a href="#sb"><span class="n">B</span>용어집</a></li>
+  </ol>
+</nav>
+
+<main>
+<h1>GenUT 사용 가이드</h1>
+<p class="lede">GenUT가 무엇으로 이루어져 있고, 어떤 순서로 테스트를 만들며, 어떻게 설치·설정해 쓰는지, 문제가 생기면 어떻게 디버깅하고 튜닝하는지를 처음 보는 사람도 따라갈 수 있게 정리했습니다.</p>
+<div class="chips"><span class="chip accent">gtest · KUnit</span><span class="chip ok">예시는 모두 실제 실행 결과</span><span class="chip">설계: docs/design.html</span><span class="chip">KUnit 스크립트 계약: docs/kunit-script.md</span></div>
+
+<div class="callout">
+<p><b>이 문서의 예시는 모두 실제 실행 결과입니다.</b> 저장소의 샘플 프로젝트(<code>tests/fixtures/sample_project</code>)를 복사해 <code>genut</code> 명령을 처음부터 끝까지 실행하고, 터미널 출력과 실행 기록 파일을 그대로 옮겼습니다. 빌드·실행·커버리지·크래시 분석은 실제 도구(MSYS2 gcc 16, CMake 4.4, GoogleTest 1.18, gdb)가 했습니다. LLM만 비용과 재현성을 위해 <b>응답을 미리 적어 둔 가짜 provider</b>(<code>llm.provider = "fake"</code>)를 썼습니다. 실제 LLM을 쓰면 응답 내용은 달라지지만 흐름과 산출물의 형태는 같습니다. 긴 경로는 <code>~/work/sample</code>(프로젝트), <code>~/.genut</code>(GenUT 홈)처럼 줄였습니다.</p>
+</div>
+
+<!-- ============================================================ 1 -->
+<details class="sec" id="s1" open>
+<summary><span class="n">1</span>GenUT 한눈에 보기</summary>
+
+<p>GenUT는 C/C++ 소스 파일과 함수 이름을 주면 <b>그 함수의 단위 테스트를 자동으로 만들어 주는 도구</b>입니다.</p>
+<div class="tbl"><table>
+<tr><th>대상 코드</th><th>만드는 테스트</th><th>빌드·실행 방법</th></tr>
+<tr><td>유저 스페이스 C/C++</td><td>GoogleTest(gtest)</td><td>GenUT가 전용 CMake 빌드 디렉터리를 구성해 직접 빌드·실행</td></tr>
+<tr><td>리눅스 커널 C</td><td>KUnit</td><td>사용자가 준비한 실행 스크립트(커널 빌드 + QEMU 실행)를 정해진 인자로 호출</td></tr>
+</table></div>
+
+<figure class="fig"><div class="scroll"><svg viewBox="0 0 920 330" role="img" aria-label="시스템 구성도. 입력(소스 파일과 함수, 규칙 md, 설정, 빌드 정보)이 GenUT로 들어간다. GenUT 안에서 오케스트레이터가 정적 분석, 에이전트, 검증, 백엔드를 부른다. 에이전트만 LLM provider와, 백엔드만 빌드·실행 환경과 대화한다. 출력은 함수별 테스트 파일, 리포트, 실행 기록, 지식 노트다">
+<defs><marker id="f1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="pane" x="10" y="20" width="180" height="280" rx="10"/><text class="t" x="24" y="42">입력</text>
+<rect class="bx" x="24" y="56" width="152" height="46" rx="6"/><text class="t" x="100" y="76" text-anchor="middle">소스 파일 + 함수</text><text class="s" x="100" y="93" text-anchor="middle">--file · --func</text>
+<rect class="bx" x="24" y="112" width="152" height="46" rx="6"/><text class="t" x="100" y="132" text-anchor="middle">규칙 md</text><text class="s" x="100" y="149" text-anchor="middle">사람이 쓴 규칙</text>
+<rect class="bx" x="24" y="168" width="152" height="46" rx="6"/><text class="t" x="100" y="188" text-anchor="middle">설정</text><text class="s" x="100" y="205" text-anchor="middle">config · product.toml</text>
+<rect class="bx" x="24" y="224" width="152" height="60" rx="6"/><text class="t" x="100" y="246" text-anchor="middle">빌드 정보</text><text class="s" x="100" y="263" text-anchor="middle">CMake 프로젝트 또는</text><text class="s" x="100" y="277" text-anchor="middle">커널 트리 + 스크립트</text>
+<line class="ln" x1="190" y1="150" x2="226" y2="150" marker-end="url(#f1a)"/>
+<rect class="pane" x="230" y="20" width="460" height="186" rx="10"/><text class="t" x="244" y="42">GenUT</text>
+<rect class="hi" x="246" y="52" width="428" height="50" rx="8"/><text class="t" x="460" y="74" text-anchor="middle">오케스트레이터 (Python 상태 머신)</text><text class="s" x="460" y="92" text-anchor="middle">8단계 진행 · 예산 · 판정 · 통과 케이스 보존 · 실행 기록</text>
+<rect class="bx" x="246" y="130" width="98" height="56" rx="6"/><text class="t" x="295" y="152" text-anchor="middle">정적 분석</text><text class="s" x="295" y="170" text-anchor="middle">libclang</text>
+<rect class="bx" x="356" y="130" width="98" height="56" rx="6"/><text class="t" x="405" y="152" text-anchor="middle">에이전트</text><text class="s" x="405" y="170" text-anchor="middle">좁은 질문 · JSON</text>
+<rect class="bx" x="466" y="130" width="98" height="56" rx="6"/><text class="t" x="515" y="152" text-anchor="middle">검증</text><text class="s" x="515" y="170" text-anchor="middle">진단·분류·축약</text>
+<rect class="bx" x="576" y="130" width="98" height="56" rx="6"/><text class="t" x="625" y="152" text-anchor="middle">백엔드</text><text class="s" x="625" y="170" text-anchor="middle">gtest · KUnit</text>
+<line class="ln" x1="295" y1="102" x2="295" y2="128" marker-end="url(#f1a)"/><line class="ln" x1="405" y1="102" x2="405" y2="128" marker-end="url(#f1a)"/>
+<line class="ln" x1="515" y1="102" x2="515" y2="128" marker-end="url(#f1a)"/><line class="ln" x1="625" y1="102" x2="625" y2="128" marker-end="url(#f1a)"/>
+<rect class="hi" x="330" y="240" width="150" height="56" rx="28"/><text class="t" x="405" y="263" text-anchor="middle">LLM provider</text><text class="s" x="405" y="281" text-anchor="middle">Claude · Gemma 4 · fake</text>
+<rect class="bx" x="545" y="240" width="160" height="56" rx="8"/><text class="t" x="625" y="263" text-anchor="middle">빌드·실행 환경</text><text class="s" x="625" y="281" text-anchor="middle">cmake·gcc·gtest / 커널</text>
+<line class="ln acc" x1="405" y1="188" x2="405" y2="238" marker-start="url(#f1a)" marker-end="url(#f1a)"/>
+<line class="ln" x1="625" y1="188" x2="625" y2="238" marker-start="url(#f1a)" marker-end="url(#f1a)"/>
+<text class="s" x="414" y="220">에이전트만</text><text class="s" x="634" y="220">백엔드만</text>
+<line class="ln" x1="690" y1="113" x2="726" y2="113" marker-end="url(#f1a)"/>
+<rect class="pane" x="730" y="20" width="180" height="280" rx="10"/><text class="t" x="744" y="42">출력</text>
+<rect class="ok" x="744" y="56" width="152" height="52" rx="6"/><text class="t" x="820" y="77" text-anchor="middle">함수별 테스트 파일</text><text class="s" x="820" y="95" text-anchor="middle">통과한 케이스만</text>
+<rect class="bx" x="744" y="118" width="152" height="46" rx="6"/><text class="t" x="820" y="138" text-anchor="middle">리포트</text><text class="s" x="820" y="155" text-anchor="middle">report.md</text>
+<rect class="bx" x="744" y="174" width="152" height="52" rx="6"/><text class="t" x="820" y="195" text-anchor="middle">실행 기록</text><text class="s" x="820" y="213" text-anchor="middle">runs/ · view.html</text>
+<rect class="bx" x="744" y="236" width="152" height="50" rx="6"/><text class="t" x="820" y="256" text-anchor="middle">지식 노트</text><text class="s" x="820" y="274" text-anchor="middle">다음 생성에 들어감</text>
+</svg></div><figcaption>그림 1. 시스템 구성. LLM과 대화하는 것은 에이전트뿐이고, 빌드·실행 환경과 대화하는 것은 백엔드뿐입니다. 둘 사이를 오케스트레이터가 잇습니다.</figcaption></figure>
+
+<h3>핵심 원칙 다섯 가지</h3>
+<div class="grid2">
+  <div class="card"><b>순서는 코드가, 판단은 LLM이</b><span>단계 진행·빌드·실행·판정은 파이썬 코드가 하고, LLM은 "케이스를 써라", "이 실패를 어떻게 고칠까" 같은 좁은 질문에만 정해진 JSON으로 답합니다.</span></div>
+  <div class="card"><b>통과한 것만 남긴다</b><span>실제로 빌드·실행되어 통과한 케이스만 최종 파일에 들어갑니다. 일부만 통과해도 통과분은 버리지 않습니다.</span></div>
+  <div class="card"><b>케이스 단위로 고친다</b><span>실패한 케이스 하나만 다시 씁니다. 이미 통과한 케이스는 글자 하나 바뀌지 않습니다.</span></div>
+  <div class="card"><b>원시 로그 대신 구조화된 정보</b><span>수만 줄 로그 대신 "분류 + 핵심 진단 + 크래시 위치"만 LLM에 줍니다. 원본은 실행 기록에 그대로 남깁니다.</span></div>
+  <div class="card"><b>소스 트리를 더럽히지 않는다</b><span>작업은 전용 빌드 디렉터리와 <code>~/.genut</code>에서 하고, 소스 트리에는 최종 테스트 파일만 씁니다.</span></div>
+</div>
+
+<h3>지금 구현된 것과 아직 없는 것</h3>
+<div class="tbl"><table>
+<tr><th>구분</th><th>내용</th></tr>
+<tr><td><span class="chip ok">구현됨</span></td><td>정적 분석(libclang), 8단계 생성 흐름, gtest 백엔드(실제 빌드·실행·gcov 커버리지·gdb 크래시 분석), KUnit 백엔드(스크립트 계약), C++ 멤버 함수, 수정 루프와 전략 사다리, 코드 리뷰 검사와 Reviewer, 라인 커버리지 라운드, 최종 확인·설치, 지식 노트(Note Keeper)와 범위 규칙, <code>view</code>·<code>replay</code>·<code>diff</code>·<code>eval</code>·<code>finalize</code>·<code>knowledge</code> 명령</td></tr>
+<tr><td><span class="chip warn">아직 없음</span></td><td><b>스텁 도구 연동</b>(셋업 때 받을 스텁 도구 md가 필요). 그래서 지금은 정의가 없는 심볼을 스텁할 수 없고, static 함수는 KUnit <code>include_source</code> 방식이 아니면 테스트 불가로 끝납니다. 단계별 대화형 편집(<code>--interactive</code>), 실제 커널·QEMU 환경 검증, 사내 Gemma 4 튜닝</td></tr>
+</table></div>
+</details>
+
+<!-- ============================================================ 2 -->
+<details class="sec" id="s2" open>
+<summary><span class="n">2</span>구조: 무엇이 어떻게 나뉘어 있나</summary>
+
+<h3>2.1 계층</h3>
+<div class="layers">
+  <div class="layer"><b>CLI</b><span><code>genut</code> 명령 (cli.py) · 모든 메시지 한국어</span></div>
+  <div class="layer"><b>컨텍스트·설정</b><span>config.py · context.py · products.py — 홈, 프로덕트, 설정 겹쳐 올리기</span></div>
+  <div class="layer hi"><b>오케스트레이터</b><span>orchestrator.py · finalize.py · state.py · budget.py — 8단계, 수정 루프, 최종 확인</span></div>
+  <div class="layer"><b>에이전트 / LLM 계층</b><span>agents/ · llm/ — 역할 지시문, 구조화 출력, 프롬프트 조립기(컨텍스트 한도)</span></div>
+  <div class="layer"><b>분석 · 검증 · 백엔드</b><span>analysis/ · verify/ · backends/gtest · backends/kunit · coverage.py</span></div>
+  <div class="layer"><b>기록 · 관찰 · 지식</b><span>trace.py · report.py · viewer/ · replay.py · rundiff.py · evaluation.py · knowledge.py</span></div>
+</div>
+
+<h3>2.2 소스 코드 구성 (<code>src/genut/</code>)</h3>
+<div class="tbl"><table>
+<tr><th>패키지 / 모듈</th><th>하는 일</th></tr>
+<tr><td><code>cli.py</code></td><td><code>genut</code> 명령</td></tr>
+<tr><td><code>config.py</code>, <code>context.py</code>, <code>products.py</code>, <code>paths.py</code></td><td>설정 겹쳐 올리기, <code>$GENUT_HOME</code>과 프로덕트 찾기</td></tr>
+<tr><td><code>orchestrator.py</code>, <code>finalize.py</code></td><td>8단계 진행, 수정 루프, 최종 확인·설치, <code>genut finalize</code></td></tr>
+<tr><td><code>state.py</code>, <code>budget.py</code></td><td>실행 상태(함수·케이스·공유 영역), 예산(빌드·시간·토큰)</td></tr>
+<tr><td><code>analysis/</code></td><td>compile DB 읽기, gcc 플래그 정리, libclang 추출, 링크 범위 판정, 분석 보고서</td></tr>
+<tr><td><code>agents/</code></td><td>에이전트와 역할 지시문(<code>prompts/en</code>, <code>prompts/ko</code>)</td></tr>
+<tr><td><code>llm/</code></td><td>provider(anthropic, openai_compat, fake), 구조화 출력, 프롬프트 조립기, 토큰 세기</td></tr>
+<tr><td><code>verify/</code></td><td>진단 구조화, 실패 분류(<code>classify.yaml</code>), 의미 검사, 코드 리뷰 검사, 로그 축약·크래시 브리프</td></tr>
+<tr><td><code>backends/gtest/</code>, <code>backends/kunit/</code></td><td>테스트 파일 뼈대, 빌드·실행·커버리지·설치</td></tr>
+<tr><td><code>coverage.py</code></td><td>lcov/gcov 결과 읽기, 미커버 줄의 도달 조건</td></tr>
+<tr><td><code>knowledge.py</code></td><td>지식 노트·수정 사례·소스 버그 의심 목록, 범위 규칙</td></tr>
+<tr><td><code>trace.py</code>, <code>report.py</code>, <code>viewer/</code>, <code>replay.py</code>, <code>rundiff.py</code>, <code>evaluation.py</code></td><td>실행 기록, 리포트, HTML 뷰어, replay, diff, 평가</td></tr>
+</table></div>
+
+<h3>2.3 에이전트 (LLM이 맡는 일)</h3>
+<div class="tbl"><table>
+<tr><th>에이전트</th><th>언제</th><th>받는 것</th><th>내는 것</th></tr>
+<tr><td>Analyzer</td><td>① 분석</td><td>분석 보고서</td><td>테스트 가능 여부, 주의 사항, 추천 케이스</td></tr>
+<tr><td>Test Writer</td><td>④ 스모크, ⑤ 확장, ⑦ 커버리지</td><td>분석 보고서, 규칙, 통과 케이스, 미커버 줄과 도달 조건, 지식 노트</td><td>새 케이스(이름·목적·본문)와 공유 헬퍼</td></tr>
+<tr><td>Fixer</td><td>⑥ 수정</td><td>실패한 케이스, 분류·진단·크래시 브리프, 허용 전략, 과거 수정 사례</td><td>전략 하나와 다시 쓴 케이스 본문, 근거</td></tr>
+<tr><td>Unreachable Analyzer</td><td>⑦ 커버리지 끝</td><td>끝내 못 밟은 줄</td><td>줄마다 이유 분류</td></tr>
+<tr><td>Reviewer</td><td>⑧ 리뷰</td><td>통과 케이스와 수정 이력</td><td>규칙 위반·무의미한 단정·단정 약화 지적</td></tr>
+<tr><td>Note Keeper</td><td>실행이 끝난 뒤</td><td>실행 요약(판정·실패 분류·수정 결과)</td><td>다음에 도움이 될 노트와 제안 범위</td></tr>
+</table></div>
+<p class="term">설계에 있는 여섯째 에이전트 Stub Planner는 스텁 도구 연동과 함께 들어옵니다.</p>
+
+<h3>2.4 실행 상태: 함수 → 케이스</h3>
+<p>한 번의 실행(<code>RunState</code>)은 소스 파일 하나를 다루고, 그 안에 함수별 상태(<code>FunctionState</code>), 그 안에 케이스(<code>TestCase</code>)가 있습니다. <b>진행 단위는 케이스</b>입니다.</p>
+
+<figure class="fig"><div class="scroll"><svg viewBox="0 0 820 282" role="img" aria-label="케이스 상태 변화. new에서 통과하면 pass가 되어 최종 파일에 들어가고, 단정 실패나 크래시면 fail 또는 crash가 되어 수정 단계로 간다. 수정은 fix_case로 다시 new를 만들거나, 제거(dropped)하거나, 소스 버그 의심(suspected_bug)으로 보낸다. 앞 케이스가 죽어 실행되지 못한 케이스는 not_run이 되어 다음 빌드에 다시 들어간다. 통과했던 케이스가 같은 소스로 다른 결과를 내면 flaky가 된다">
+<defs><marker id="f3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<text class="s" x="512" y="13" text-anchor="middle">같은 소스인데 결과가 달라짐</text>
+<g transform="translate(0,20)">
+<rect class="bx" x="30" y="112" width="100" height="40" rx="20"/><text class="t m" x="80" y="137" text-anchor="middle">new</text>
+<rect class="ok" x="220" y="24" width="120" height="40" rx="20"/><text class="okt m" x="280" y="49" text-anchor="middle">pass</text>
+<rect class="ok" x="420" y="24" width="150" height="40" rx="8"/><text class="t" x="495" y="49" text-anchor="middle">최종 파일에 들어감</text>
+<rect class="warn" x="650" y="24" width="150" height="40" rx="20"/><text class="warnt m" x="725" y="49" text-anchor="middle">flaky</text>
+<rect class="bad" x="220" y="112" width="120" height="40" rx="20"/><text class="badt m" x="280" y="137" text-anchor="middle">fail / crash</text>
+<rect class="hi" x="420" y="108" width="150" height="48" rx="8"/><text class="t" x="495" y="128" text-anchor="middle">⑥ 수정 (Fixer)</text><text class="s" x="495" y="145" text-anchor="middle">분류 → 전략</text>
+<rect class="mute" x="650" y="88" width="150" height="40" rx="20"/><text class="t m" x="725" y="113" text-anchor="middle">dropped</text>
+<rect class="warn" x="650" y="140" width="150" height="40" rx="20"/><text class="warnt m" x="725" y="165" text-anchor="middle">suspected_bug</text>
+<rect class="mute" x="220" y="208" width="120" height="40" rx="20"/><text class="t m" x="280" y="233" text-anchor="middle">not_run</text>
+<line class="ln" x1="130" y1="124" x2="218" y2="50" marker-end="url(#f3a)"/><text class="s" x="150" y="78">통과</text>
+<line class="ln" x1="340" y1="44" x2="418" y2="44" marker-end="url(#f3a)"/><text class="s" x="352" y="38">최종 확인</text>
+<path class="ln dash" d="M300,24 C300,2 725,2 725,22" marker-end="url(#f3a)"/>
+<line class="ln" x1="130" y1="132" x2="218" y2="132" marker-end="url(#f3a)"/><text class="s" x="140" y="125">실패</text>
+<line class="ln" x1="340" y1="132" x2="418" y2="132" marker-end="url(#f3a)"/>
+<line class="ln" x1="570" y1="122" x2="648" y2="110" marker-end="url(#f3a)"/><text class="s" x="578" y="104">drop · 한도</text>
+<line class="ln" x1="570" y1="142" x2="648" y2="158" marker-end="url(#f3a)"/><text class="s" x="572" y="172">근거 없는 베끼기</text>
+<path class="ln acc" d="M495,156 L495,188 L80,188 L80,154" marker-end="url(#f3a)"/><text class="acct" x="250" y="178" font-size="11">fix_case: 다시 써서 new로</text>
+<path class="ln" d="M60,152 L60,228 L218,228" marker-end="url(#f3a)"/><text class="s" x="66" y="248">앞 케이스가 죽어 실행 못 함</text>
+<path class="ln dash" d="M250,208 L122,154" marker-end="url(#f3a)"/><text class="s" x="96" y="214">다음 빌드에 다시 포함</text>
+</g>
+</svg></div><figcaption>그림 2. 케이스 상태 변화. 통과한 케이스는 이후 어떤 단계에서도 본문이 바뀌지 않습니다.</figcaption></figure>
+
+<div class="tbl"><table>
+<tr><th>상태</th><th>뜻</th></tr>
+<tr><td><code>new</code></td><td>아직 검증 전 (처음 쓰였거나 고쳐진 직후)</td></tr>
+<tr><td><code>pass</code></td><td>통과. 이후 본문이 바뀌지 않음</td></tr>
+<tr><td><code>fail</code> / <code>crash</code></td><td>실패. 수정 루프 대상</td></tr>
+<tr><td><code>not_run</code></td><td>같은 실행 파일의 앞 케이스가 죽어서 실행되지 못함. 다음 빌드에서 다시 실행</td></tr>
+<tr><td><code>dropped</code></td><td>제거됨 (수정 한도, Fixer의 drop_case 등). 최종 파일에 안 들어감</td></tr>
+<tr><td><code>suspected_bug</code></td><td>테스트가 아니라 소스가 틀렸을 가능성. 리포트와 <code>suspected_bugs.md</code>에 남음</td></tr>
+<tr><td><code>flaky</code></td><td>소스가 같은데 빌드마다 결과가 달라 제외</td></tr>
+</table></div>
+<p>여러 케이스가 함께 쓰는 include·헬퍼 함수는 <b>공유 영역</b>으로 따로 관리합니다. 공유 영역을 바꾼 뒤 통과 케이스가 깨지면 그 변경을 되돌립니다.</p>
+
+<h3>2.5 파일은 어디에 생기나</h3>
+<pre class="tree">~/.genut/                         ← GENUT_HOME (환경 변수 GENUT_HOME 또는 --home으로 바꿀 수 있음)
+├── config.toml                   공통 설정 (genut init)
+├── products.toml                 등록된 프로덕트 이름 → 소스 트리 경로
+├── rules/common.md, gtest.md, kunit.md     공통 규칙 (genut init)
+├── prompts/&lt;role&gt;.md             (선택) 역할 지시문 튜닝본
+├── knowledge/global.md, fix_patterns.yaml, token_calibration.json   공통 지식
+├── evals/baselines/&lt;모델&gt;.json   평가 기준치
+└── products/&lt;이름&gt;/              프로덕트 폴더 (genut product add)
+    ├── product.toml              프로덕트 설정
+    ├── rules/common.md, &lt;backend&gt;.md   (선택) 프로덕트 추가 규칙
+    ├── knowledge/product.md, fix_patterns.yaml, suspected_bugs.md, preflight.cache.json
+    ├── runs/&lt;시각&gt;-&lt;라벨&gt;/        실행 기록 (실행마다 하나)
+    └── evals/runs/               평가 결과
+
+&lt;프로덕트 소스 트리&gt;/
+├── build-genut/                  GenUT 전용 빌드 디렉터리 (gtest). 사용자 빌드는 건드리지 않음
+└── tests/generated/              설치된 테스트 파일과 GenUT가 관리하는 CMakeLists.txt</pre>
+<div class="callout warn"><p>프로덕트 소스 트리에 GenUT가 쓰는 것은 <code>build-genut/</code>(작업용)과 <code>tests/generated/</code>(최종 테스트)뿐입니다. <code>build-genut/</code>은 <code>.gitignore</code>에 넣으세요.</p></div>
+</details>
+
+<!-- ============================================================ 3 -->
+<details class="sec" id="s3" open>
+<summary><span class="n">3</span>동작: 테스트가 만들어지는 8단계</summary>
+
+<figure class="fig"><div class="scroll"><svg viewBox="0 0 940 300" role="img" aria-label="8단계 흐름. 분석, 스텁, 사전검증, 스모크, 확장, 수정, 커버리지, 리뷰, 최종 확인이 차례로 이어진다. 사전검증이 실패하면 환경 문제로 종료한다. 수정은 확장으로 돌아가 재검증하고, 커버리지에서 새 케이스가 실패하면 수정으로 간다. 각 단계 아래에 실행 기록에 남는 파일이 적혀 있다">
+<defs><marker id="f4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="f4b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah badf" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="f4c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="bad" x="196" y="8" width="132" height="36" rx="6"/><text class="badt" x="262" y="24" text-anchor="middle" font-size="11">환경 문제로 종료</text><text class="s" x="262" y="38" text-anchor="middle">LLM 비용 없음</text>
+<line class="ln badl" x1="262" y1="80" x2="262" y2="46" marker-end="url(#f4b)"/><text class="badt" x="268" y="66" font-size="11">실패</text>
+<path class="ln acc" d="M560,80 C560,52 455,52 455,78" marker-end="url(#f4c)"/><text class="acct" x="478" y="56" font-size="11">재검증</text>
+<path class="ln acc" d="M670,80 C670,52 575,52 575,78" marker-end="url(#f4c)"/><text class="acct" x="588" y="50" font-size="11">새 케이스 실패</text>
+<g>
+<rect class="hi" x="10" y="80" width="92" height="56" rx="8"/><text class="t" x="56" y="102" text-anchor="middle">① 분석</text><text class="s" x="56" y="120" text-anchor="middle">코드+Analyzer</text>
+<rect class="bx" x="113" y="80" width="92" height="56" rx="8"/><text class="t" x="159" y="102" text-anchor="middle">② 스텁</text><text class="s" x="159" y="120" text-anchor="middle">코드</text>
+<rect class="bx" x="216" y="80" width="92" height="56" rx="8"/><text class="t" x="262" y="102" text-anchor="middle">③ 사전검증</text><text class="s" x="262" y="120" text-anchor="middle">코드 · 빌드</text>
+<rect class="hi" x="319" y="80" width="92" height="56" rx="8"/><text class="t" x="365" y="102" text-anchor="middle">④ 스모크</text><text class="s" x="365" y="120" text-anchor="middle">Test Writer</text>
+<rect class="hi" x="422" y="80" width="92" height="56" rx="8"/><text class="t" x="468" y="102" text-anchor="middle">⑤ 확장</text><text class="s" x="468" y="120" text-anchor="middle">Test Writer</text>
+<rect class="hi" x="525" y="80" width="92" height="56" rx="8"/><text class="t" x="571" y="102" text-anchor="middle">⑥ 수정</text><text class="s" x="571" y="120" text-anchor="middle">코드+Fixer</text>
+<rect class="hi" x="628" y="80" width="92" height="56" rx="8"/><text class="t" x="674" y="102" text-anchor="middle">⑦ 커버리지</text><text class="s" x="674" y="120" text-anchor="middle">코드+Writer</text>
+<rect class="hi" x="731" y="80" width="92" height="56" rx="8"/><text class="t" x="777" y="102" text-anchor="middle">⑧ 리뷰</text><text class="s" x="777" y="120" text-anchor="middle">코드+Reviewer</text>
+<rect class="ok" x="834" y="80" width="96" height="56" rx="8"/><text class="t" x="882" y="102" text-anchor="middle">최종 확인</text><text class="s" x="882" y="120" text-anchor="middle">빌드·설치</text>
+</g>
+<line class="ln" x1="102" y1="108" x2="111" y2="108" marker-end="url(#f4a)"/><line class="ln" x1="205" y1="108" x2="214" y2="108" marker-end="url(#f4a)"/>
+<line class="ln" x1="308" y1="108" x2="317" y2="108" marker-end="url(#f4a)"/><line class="ln" x1="411" y1="108" x2="420" y2="108" marker-end="url(#f4a)"/>
+<line class="ln" x1="514" y1="108" x2="523" y2="108" marker-end="url(#f4a)"/><line class="ln" x1="617" y1="108" x2="626" y2="108" marker-end="url(#f4a)"/>
+<line class="ln" x1="720" y1="108" x2="729" y2="108" marker-end="url(#f4a)"/><line class="ln" x1="823" y1="108" x2="832" y2="108" marker-end="url(#f4a)"/>
+<text class="s" x="10" y="160">실행 기록에 남는 것</text>
+<line class="ln dash" x1="10" y1="168" x2="930" y2="168" opacity=".5"/>
+<text class="ms" x="56" y="186" text-anchor="middle">analysis/*.md</text><text class="ms" x="56" y="200" text-anchor="middle">linkscope.json</text><text class="ms" x="56" y="214" text-anchor="middle">prompts/01-*</text>
+<text class="s" x="159" y="186" text-anchor="middle">(스텁 도구</text><text class="s" x="159" y="200" text-anchor="middle">연동 후)</text>
+<text class="ms" x="262" y="186" text-anchor="middle">preflight.log</text><text class="s" x="262" y="200" text-anchor="middle">캐시 · 느리면</text><text class="s" x="262" y="214" text-anchor="middle">④ 생략</text>
+<text class="ms" x="365" y="186" text-anchor="middle">prompts/*smoke</text><text class="ms" x="365" y="200" text-anchor="middle">candidates/r1</text>
+<text class="ms" x="468" y="186" text-anchor="middle">prompts/*expand</text><text class="ms" x="468" y="200" text-anchor="middle">candidates/rN</text>
+<text class="ms" x="571" y="186" text-anchor="middle">fixes/*.md</text><text class="ms" x="571" y="200" text-anchor="middle">crash/*.md</text><text class="ms" x="571" y="214" text-anchor="middle">prompts/*fixer</text>
+<text class="ms" x="674" y="186" text-anchor="middle">coverage/m*</text><text class="ms" x="674" y="200" text-anchor="middle">prompts/*cover</text>
+<text class="ms" x="777" y="186" text-anchor="middle">prompts/*review</text>
+<text class="ms" x="882" y="186" text-anchor="middle">final/</text><text class="ms" x="882" y="200" text-anchor="middle">snapshots/</text><text class="ms" x="882" y="214" text-anchor="middle">tests/generated/</text><text class="ms" x="882" y="228" text-anchor="middle">knowledge/</text>
+<rect class="hi" x="10" y="256" width="14" height="14" rx="3"/><text class="s" x="30" y="267">LLM이 답하는 단계</text>
+<rect class="bx" x="150" y="256" width="14" height="14" rx="3"/><text class="s" x="170" y="267">코드만 하는 단계</text>
+<text class="s" x="300" y="267">수정 루프는 확장·커버리지 안에서 돌기 때문에 터미널에서 [6/8]이 [5/8] 사이에 나올 수 있습니다.</text>
+</svg></div><figcaption>그림 3. 8단계와 단계마다 실행 기록(<code>runs/&lt;시각&gt;-&lt;라벨&gt;/</code>)에 남는 파일.</figcaption></figure>
+
+<h3>3.1 단계별 상세</h3>
+<div class="tbl"><table>
+<tr><th>단계</th><th>누가</th><th>하는 일</th><th>실패하면</th></tr>
+<tr><td>① 분석</td><td>코드 + Analyzer</td><td>libclang으로 시그니처·소스·분기·반환 지점·호출·타입·전역·상수를 뽑고, 호출마다 <b>링크 범위</b>(같은 파일 / 링크하는 타깃에 있음 / 외부 / 정의 없음)를 판정. Analyzer가 테스트 가능 여부·주의 사항·추천 케이스를 냄</td><td>테스트 불가면 그 함수는 <code>untestable</code></td></tr>
+<tr><td>② 스텁</td><td>코드</td><td>정의 없는 심볼과 <code>## 반드시 스텁</code> 규칙 정리. <b>스텁 도구 연동 전이라 지금은 스텁을 만들지 않음</b></td><td>—</td></tr>
+<tr><td>③ 사전검증</td><td>코드</td><td>케이스 없는 뼈대만 빌드해 환경(include, 링크, CMake)을 확인. 뼈대·환경이 이전 성공과 같으면 캐시. 빌드가 <code>slow_build_threshold_sec</code>(120초)보다 느리면 스모크를 생략</td><td><code>infra_error</code>로 실행 종료 (LLM 비용 없음)</td></tr>
+<tr><td>④ 스모크</td><td>Test Writer</td><td>가장 단순한 정상 경로 케이스 <b>하나</b>로 뼈대·include·링크가 실제로 맞는지 확인</td><td>수정 루프</td></tr>
+<tr><td>⑤ 확장</td><td>Test Writer</td><td>오류 반환·경계값·NULL 케이스 추가. 모든 함수를 한 번에 빌드하고 함수별로 실행</td><td>수정 루프</td></tr>
+<tr><td>⑥ 수정</td><td>코드 + Fixer</td><td>실패를 <b>분류</b>하고 권장 전략을 정한 뒤 Fixer가 그 케이스만 다시 씀. 크래시면 의심 케이스만 다시 실행(격리)해 gdb 백트레이스로 크래시 브리프를 만듦</td><td>한도를 넘으면 제거</td></tr>
+<tr><td>⑦ 커버리지</td><td>코드 + Test Writer</td><td>통과 케이스만 다시 실행해 gcov로 라인 커버리지를 재고, 못 밟은 줄마다 <b>도달 조건</b>을 붙여 케이스를 더 받음. 라운드가 끝나도 남은 줄은 Unreachable Analyzer가 이유를 분류(<code>unreachable_defensive</code>, <code>needs_stub_behavior</code>, <code>config_dependent</code>, <code>optimized_out</code>, <code>unknown</code>)</td><td>새 케이스는 수정 루프로</td></tr>
+<tr><td>⑧ 리뷰</td><td>코드 + Reviewer</td><td>코드 검사(아래 3.3)는 통과 즉시, Reviewer는 마지막에 규칙의 의도·무의미한 단정·단정 약화·커버리지용 케이스의 확인 누락을 봄</td><td>지적된 케이스는 한 번만 고치고, 안 되면 제거</td></tr>
+<tr><td>최종 확인</td><td>코드</td><td>통과 케이스만 담은 파일로 다시 빌드·실행(<code>final_build_reserve</code>만큼 빌드를 남겨 둠). 깨지면 녹색 스냅샷으로 되돌림. 통과분을 프로덕트 트리에 설치</td><td>스냅샷 사용 또는 미확인 표시</td></tr>
+<tr><td>노트</td><td>Note Keeper</td><td>배울 것이 있는 실행이면 다음 생성에 도움이 될 노트를 남김. 범위(공통/프로덕트)는 코드가 정함</td><td>실패해도 마무리는 계속</td></tr>
+</table></div>
+
+<h3>3.2 실패 분류와 전략 사다리</h3>
+<p>실패는 먼저 코드가 <b>분류</b>하고, 분류마다 <b>권장 시작 전략</b>이 있습니다. Fixer는 권장 전략과 그보다 더 포기하는 쪽(오른쪽)만 고를 수 있습니다.</p>
+<div class="ladder">
+  <span class="s">fix_case<small>케이스 고치기</small></span><span class="a">→</span>
+  <span class="s">add_stub<small>스텁 추가</small></span><span class="a">→</span>
+  <span class="s">drop_case<small>케이스 제거</small></span><span class="a">→</span>
+  <span class="s">narrow_scope<small>범위 축소</small></span><span class="a">→</span>
+  <span class="s">give_up<small>함수 포기</small></span>
+</div>
+<div class="tbl"><table>
+<tr><th>분류</th><th>언제</th><th>권장 전략</th></tr>
+<tr><td><code>missing_include</code></td><td>선언을 못 찾음, unknown type name, implicit declaration</td><td>fix_case</td></tr>
+<tr><td><code>undeclared_identifier</code></td><td>없는 이름·필드를 씀</td><td>fix_case</td></tr>
+<tr><td><code>type_mismatch</code></td><td>인자 개수·타입 불일치</td><td>fix_case</td></tr>
+<tr><td><code>warning_as_error</code></td><td><code>-Werror</code>로 경고가 오류가 됨</td><td>fix_case</td></tr>
+<tr><td><code>compile_error</code></td><td>그 밖의 컴파일 오류</td><td>fix_case</td></tr>
+<tr><td><code>undefined_reference</code></td><td>링크 시 정의 없음</td><td>add_stub (스텁 도구가 없으면 narrow_scope)</td></tr>
+<tr><td><code>duplicate_symbol</code></td><td>스텁과 실제 정의 충돌</td><td>add_stub</td></tr>
+<tr><td><code>assertion_failed</code></td><td>단정 실패</td><td>fix_case</td></tr>
+<tr><td><code>crash</code></td><td>세그폴트, 새니타이저, 커널 oops·KASAN 등</td><td>fix_case (같은 케이스가 또 죽으면 제거)</td></tr>
+<tr><td><code>timeout</code></td><td>시간 초과</td><td>drop_case (한 번은 고쳐 봄)</td></tr>
+<tr><td><code>review_reject</code></td><td>코드 리뷰 검사나 Reviewer 지적</td><td>fix_case</td></tr>
+<tr><td><code>context_overflow</code></td><td>필수 프롬프트만으로 LLM 한도 초과</td><td>narrow_scope</td></tr>
+<tr><td><code>infra_error</code></td><td>환경 문제 (사전검증 실패, LLM 연결 실패 등)</td><td>give_up — 실행을 멈춤</td></tr>
+</table></div>
+<p>컴파일 오류 분류 규칙은 <code>src/genut/verify/classify.yaml</code>에 있어 코드 수정 없이 패턴을 추가할 수 있습니다(위에서부터 처음 맞는 규칙).</p>
+
+<h3>3.3 코드가 하는 리뷰 검사</h3>
+<div class="tbl"><table>
+<tr><th>검사</th><th>걸리는 예</th></tr>
+<tr><td><code>no_assertion</code></td><td><code>EXPECT_*</code>/<code>ASSERT_*</code>/<code>KUNIT_EXPECT_*</code>가 하나도 없음</td></tr>
+<tr><td><code>always_true</code></td><td><code>EXPECT_EQ(1, 1)</code>처럼 결과가 항상 같은 단정</td></tr>
+<tr><td><code>rejected_pattern</code></td><td>규칙 md <code>## 리뷰에서 거부할 패턴</code>의 정규식에 맞음</td></tr>
+<tr><td><code>target_not_called</code></td><td>대상 함수를 호출하지 않음 (C++ 멤버는 <code>obj.f()</code>, <code>p-&gt;f()</code>, <code>C::f()</code>도 인정)</td></tr>
+<tr><td><code>copied_actual</code></td><td>직전 실패의 실제값을 기대값으로 옮겼는데 Fixer가 소스의 반환 지점 근거(<code>evidence</code>)를 대지 못함 → 소스 버그 의심</td></tr>
+</table></div>
+
+<h3>3.4 결과 판정</h3>
+<div class="tbl"><table>
+<tr><th>결과</th><th>뜻</th></tr>
+<tr><td><span class="chip ok">complete</span></td><td>모든 케이스가 통과(또는 소스 버그 의심)했고 라인 커버리지 목표(기본 100%)에 도달</td></tr>
+<tr><td><span class="chip warn">partial</span></td><td>통과 케이스가 있지만 제거된 케이스가 있거나 커버리지가 목표 미달</td></tr>
+<tr><td><span class="chip bad">none</span></td><td>통과 케이스가 없음 (파일을 만들지 않음)</td></tr>
+</table></div>
+<p>최종 확인 결과: <code>ok</code>(다시 빌드·실행해 확인), <code>partial</code>(일부 제거 뒤 재확인 못 함), <code>snapshot</code>(녹색 스냅샷 사용), <code>unverified</code>(확인 못 함, 기본은 설치 안 함), <code>none</code>.</p>
+
+<h3>3.5 예산</h3>
+<div class="tbl"><table>
+<tr><th><code>[budget]</code></th><th>gtest</th><th>KUnit</th><th>뜻</th></tr>
+<tr><td><code>max_builds_per_run</code></td><td>30</td><td>10</td><td>실행 하나의 빌드 횟수 상한</td></tr>
+<tr><td><code>max_seconds_per_run</code></td><td>1800</td><td>7200</td><td>실행 하나의 시간 상한(초)</td></tr>
+<tr><td><code>final_build_reserve</code></td><td>2</td><td>1</td><td>최종 확인용으로 남겨 두는 빌드</td></tr>
+<tr><td><code>max_isolation_runs</code></td><td>4</td><td>2</td><td>크래시 격리 재실행 횟수</td></tr>
+<tr><td><code>max_iterations</code></td><td>4</td><td>4</td><td>수정 라운드 수</td></tr>
+<tr><td><code>max_case_fixes</code></td><td>2</td><td>2</td><td>케이스 하나를 고칠 수 있는 횟수</td></tr>
+<tr><td><code>max_coverage_rounds</code></td><td>3</td><td>3</td><td>커버리지 라운드 수</td></tr>
+<tr><td><code>max_tokens_per_function</code></td><td>300000</td><td>300000</td><td>함수 하나에 쓸 LLM 토큰(입력+출력)</td></tr>
+<tr><td><code>candidates</code></td><td>1</td><td>1</td><td>한 번에 받는 후보 수 (Gemma 권장 3)</td></tr>
+</table></div>
+<p>예산이 떨어져도, 중단(Ctrl+C)되어도, 내부 오류가 나도 그때까지 통과한 케이스는 최종 확인을 거쳐 설치됩니다.</p>
+
+<h3>3.6 지식 노트</h3>
+<figure class="fig"><div class="scroll"><svg viewBox="0 0 900 248" role="img" aria-label="지식 노트 범위 결정. Note Keeper 제안은 먼저 근거가 이번 실행의 함수나 케이스인지 확인해 아니면 버린다. 프로덕트 고유 정보(심볼, 설정값, 루트 아래 경로)가 있거나 product로 제안되면 프로덕트 노트가 된다. 없고 global로 제안되면 공통 후보가 되고, 같은 정규화 키가 기준 수 이상의 프로덕트에서 나오면 공통 지식으로 승격된다">
+<defs><marker id="f5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="hi" x="10" y="80" width="130" height="56" rx="8"/><text class="t" x="75" y="103" text-anchor="middle">Note Keeper 제안</text><text class="s" x="75" y="121" text-anchor="middle">한 문장 + 범위 + 근거</text>
+<rect class="bx" x="180" y="80" width="140" height="56" rx="8"/><text class="t" x="250" y="103" text-anchor="middle">근거 확인</text><text class="s" x="250" y="121" text-anchor="middle">이번 실행의 함수·케이스?</text>
+<rect class="mute" x="190" y="168" width="120" height="36" rx="18"/><text class="s" x="250" y="191" text-anchor="middle">아니면 버림</text>
+<rect class="bx" x="360" y="80" width="170" height="56" rx="8"/><text class="t" x="445" y="103" text-anchor="middle">프로덕트 고유 정보?</text><text class="s" x="445" y="121" text-anchor="middle">심볼·설정값·루트 아래 경로</text>
+<rect class="bx" x="590" y="16" width="160" height="50" rx="8"/><text class="t" x="670" y="37" text-anchor="middle">프로덕트 노트</text><text class="ms" x="670" y="54" text-anchor="middle">product.md</text>
+<rect class="warn" x="590" y="150" width="160" height="50" rx="8"/><text class="t" x="670" y="171" text-anchor="middle">공통 후보</text><text class="s" x="670" y="188" text-anchor="middle">product.md의 ## 공통 후보</text>
+<rect class="ok" x="790" y="150" width="100" height="50" rx="8"/><text class="t" x="840" y="171" text-anchor="middle">공통 지식</text><text class="ms" x="840" y="188" text-anchor="middle">global.md</text>
+<line class="ln" x1="140" y1="108" x2="178" y2="108" marker-end="url(#f5a)"/>
+<line class="ln" x1="250" y1="136" x2="250" y2="166" marker-end="url(#f5a)"/>
+<line class="ln" x1="320" y1="108" x2="358" y2="108" marker-end="url(#f5a)"/>
+<path class="ln" d="M530,96 L560,96 L560,41 L588,41" marker-end="url(#f5a)"/><text class="s" x="536" y="66">있음 /</text><text class="s" x="536" y="80">product 제안</text>
+<path class="ln" d="M530,120 L560,120 L560,175 L588,175" marker-end="url(#f5a)"/><text class="s" x="490" y="150">없음 + global 제안</text>
+<line class="ln" x1="750" y1="175" x2="788" y2="175" marker-end="url(#f5a)"/><text class="s" x="758" y="218">같은 키가</text><text class="s" x="758" y="232">N개 프로덕트에서</text>
+</svg></div><figcaption>그림 4. 노트의 범위는 LLM 제안이 아니라 코드가 정합니다. N은 <code>auto_promote_after_products</code>(기본 2).</figcaption></figure>
+<p>노트는 다음 생성의 Test Writer·Fixer 프롬프트에 토큰 예산(<code>knowledge_token_budget</code>) 안에서 들어갑니다. <b>다른 프로덕트의 노트는 절대 프롬프트에 넣지 않습니다.</b> 배울 것이 없는 실행(모든 케이스가 첫 시도에 통과), <code>--dry-run</code>, <code>--stop-after</code>, 중단된 실행, <code>genut eval</code>, <code>genut replay</code>에서는 Note Keeper를 부르지 않습니다.</p>
+</details>
+
+<!-- ============================================================ 4 -->
+<details class="sec" id="s4" open>
+<summary><span class="n">4</span>환경 셋업: 무엇을 어디에 추가하나</summary>
+
+<figure class="fig"><div class="scroll"><svg viewBox="0 0 940 420" role="img" aria-label="셋업 지도. 개발 PC, GenUT 홈, 프로덕트 소스 트리(gtest), 커널 트리(KUnit) 네 곳에 무엇이 추가되는지와 누가 추가하는지를 색으로 보여 준다">
+<rect class="pane" x="8" y="8" width="220" height="404" rx="10"/><text class="t" x="22" y="30">개발 PC</text>
+<rect class="warn" x="20" y="44" width="196" height="46" rx="6"/><text class="t" x="30" y="63">Python 3.11+ · uv · GenUT</text><text class="s" x="30" y="80">uv pip install -e .</text>
+<rect class="warn" x="20" y="98" width="196" height="58" rx="6"/><text class="t" x="30" y="117">gtest 도구</text><text class="s" x="30" y="133">cmake · gcc/clang · gtest</text><text class="s" x="30" y="148">gcov · gdb (PATH)</text>
+<rect class="warn" x="20" y="164" width="196" height="58" rx="6"/><text class="t" x="30" y="183">KUnit 도구</text><text class="s" x="30" y="199">커널 툴체인 · QEMU</text><text class="s" x="30" y="214">실행 스크립트</text>
+<rect class="warn" x="20" y="230" width="196" height="58" rx="6"/><text class="t" x="30" y="249">환경 변수 (키)</text><text class="ms" x="30" y="265">ANTHROPIC_API_KEY</text><text class="ms" x="30" y="279">GENUT_LLM_KEY</text>
+
+<rect class="pane" x="240" y="8" width="230" height="404" rx="10"/><text class="t" x="254" y="30">~/.genut (GenUT 홈)</text>
+<rect class="hi" x="252" y="44" width="206" height="46" rx="6"/><text class="m" x="262" y="63">config.toml</text><text class="s" x="262" y="80">init이 만들고 사람이 수정</text>
+<rect class="hi" x="252" y="98" width="206" height="46" rx="6"/><text class="m" x="262" y="117">rules/*.md</text><text class="s" x="262" y="134">init이 만들고 사람이 수정</text>
+<rect class="warn" x="252" y="152" width="206" height="46" rx="6"/><text class="m" x="262" y="171">prompts/&lt;role&gt;.md</text><text class="s" x="262" y="188">(선택) 사람이 추가</text>
+<rect class="hi" x="252" y="206" width="206" height="46" rx="6"/><text class="m" x="262" y="225">products/&lt;이름&gt;/product.toml</text><text class="s" x="262" y="242">product add 후 사람이 수정</text>
+<rect class="ok" x="252" y="260" width="206" height="46" rx="6"/><text class="m" x="262" y="279">products/&lt;이름&gt;/runs/</text><text class="s" x="262" y="296">GenUT가 씀 (실행 기록)</text>
+<rect class="ok" x="252" y="314" width="206" height="46" rx="6"/><text class="m" x="262" y="333">knowledge/ · evals/</text><text class="s" x="262" y="350">GenUT가 씀 (노트·기준치)</text>
+
+<rect class="pane" x="482" y="8" width="220" height="404" rx="10"/><text class="t" x="496" y="30">프로덕트 소스 트리 (gtest)</text>
+<rect class="warn" x="494" y="44" width="196" height="58" rx="6"/><text class="m" x="504" y="63">CMakeLists.txt</text><text class="s" x="504" y="80">+ add_subdirectory(</text><text class="s" x="504" y="95">tests/generated) (선택)</text>
+<rect class="ok" x="494" y="110" width="196" height="58" rx="6"/><text class="m" x="504" y="129">build-genut/</text><text class="s" x="504" y="146">GenUT 전용 빌드 (작업용)</text><text class="s" x="504" y="161">genut-inject.cmake, genut-src/</text>
+<rect class="ok" x="494" y="176" width="196" height="58" rx="6"/><text class="m" x="504" y="195">tests/generated/</text><text class="s" x="504" y="212">*_test.cc + CMakeLists.txt</text><text class="s" x="504" y="227">GenUT가 설치</text>
+<rect class="warn" x="494" y="242" width="196" height="46" rx="6"/><text class="m" x="504" y="261">.gitignore</text><text class="s" x="504" y="278">+ build-genut/</text>
+<text class="s" x="494" y="312">그 밖의 소스는 건드리지 않음</text>
+
+<rect class="pane" x="714" y="8" width="218" height="404" rx="10"/><text class="t" x="728" y="30">커널 트리 (KUnit)</text>
+<rect class="warn" x="726" y="44" width="194" height="58" rx="6"/><text class="m" x="736" y="63">drivers/foo/Makefile</text><text class="s" x="736" y="80">+ obj-$(CONFIG_..._TEST)</text><text class="s" x="736" y="95">+= foo_kunit.o (한 번)</text>
+<rect class="warn" x="726" y="110" width="194" height="46" rx="6"/><text class="m" x="736" y="129">drivers/foo/Kconfig</text><text class="s" x="736" y="146">+ config FOO_KUNIT_TEST</text>
+<rect class="warn" x="726" y="164" width="194" height="58" rx="6"/><text class="m" x="736" y="183">.config / .kunitconfig</text><text class="s" x="736" y="199">CONFIG_KUNIT=y, 테스트 심볼</text><text class="s" x="736" y="214">CONFIG_GCOV_KERNEL=y</text>
+<rect class="warn" x="726" y="230" width="194" height="46" rx="6"/><text class="m" x="736" y="249">compile_commands.json</text><text class="s" x="736" y="266">make compile_commands.json</text>
+<rect class="ok" x="726" y="284" width="194" height="46" rx="6"/><text class="m" x="736" y="303">foo_kunit.c</text><text class="s" x="736" y="320">집합 파일. 내용은 GenUT가 씀</text>
+<rect class="ok" x="726" y="338" width="194" height="46" rx="6"/><text class="m" x="736" y="357">tests/*_test.c</text><text class="s" x="736" y="374">GenUT가 씀 (함수별)</text>
+</svg></div>
+<div class="legend"><span><i class="warn"></i>사람이 추가·작성</span><span><i class="hi"></i>GenUT가 만들고 사람이 수정</span><span><i class="ok"></i>GenUT가 쓰고 관리</span></div>
+<figcaption>그림 5. 셋업할 때 무엇이 어디에 추가되는가.</figcaption></figure>
+
+<h3>4.1 셋업 체크리스트</h3>
+<div class="tbl"><table>
+<tr><th>어디에</th><th>무엇을</th><th>누가</th><th>gtest</th><th>KUnit</th></tr>
+<tr><td>개발 PC</td><td>Python 3.11+, <code>uv</code>, GenUT 설치</td><td>사람</td><td>필수</td><td>필수</td></tr>
+<tr><td>개발 PC</td><td>cmake, C/C++ 컴파일러, GoogleTest, gcov, (권장) gdb</td><td>사람</td><td>필수</td><td>—</td></tr>
+<tr><td>개발 PC / 서버</td><td>커널 트리, 툴체인, QEMU, 실행 스크립트</td><td>사람</td><td>—</td><td>필수</td></tr>
+<tr><td>환경 변수</td><td>LLM 키 (<code>ANTHROPIC_API_KEY</code> 또는 <code>GENUT_LLM_KEY</code>)</td><td>사람</td><td>필수</td><td>필수</td></tr>
+<tr><td><code>~/.genut/config.toml</code></td><td>provider, 모델, 예산 기본값</td><td><code>genut init</code> 후 사람</td><td>필수</td><td>필수</td></tr>
+<tr><td><code>~/.genut/rules/*.md</code></td><td>팀 공통 규칙</td><td><code>genut init</code> 후 사람</td><td>권장</td><td>권장</td></tr>
+<tr><td><code>~/.genut/products/&lt;이름&gt;/product.toml</code></td><td>백엔드, 링크 타깃 또는 커널 설정</td><td><code>genut product add</code> 후 사람</td><td>필수</td><td>필수</td></tr>
+<tr><td>프로덕트 루트 <code>CMakeLists.txt</code></td><td><code>add_subdirectory(tests/generated)</code> 한 줄</td><td>사람</td><td>선택</td><td>—</td></tr>
+<tr><td>커널 <code>Makefile</code> / <code>Kconfig</code></td><td>집합 파일 오브젝트와 Kconfig 심볼</td><td>사람 (한 번)</td><td>—</td><td>필수</td></tr>
+<tr><td>커널 <code>.config</code> / <code>.kunitconfig</code></td><td><code>CONFIG_KUNIT=y</code>, 테스트 심볼, <code>CONFIG_GCOV_KERNEL=y</code></td><td>사람</td><td>—</td><td>필수</td></tr>
+<tr><td><code>.gitignore</code></td><td><code>build-genut/</code></td><td>사람</td><td>권장</td><td>—</td></tr>
+</table></div>
+
+<h3>4.2 GenUT 설치</h3>
+<pre class="term">git clone https://github.com/haangman/GenUT.git
+cd GenUT
+uv venv .venv
+uv pip install --python .venv -e ".[dev]"
+.venv/Scripts/genut --help        # Linux/macOS: .venv/bin/genut</pre>
+<p>libclang은 pip <code>libclang</code> 패키지로 함께 설치됩니다. 시스템 clang은 필요 없습니다.</p>
+
+<h3>4.3 gtest 빌드 도구</h3>
+<div class="grid2">
+<div class="card"><b>Windows (MSYS2 UCRT64) — 이 문서의 예시 환경</b>
+<pre class="term" style="margin:6px 0 0">winget install MSYS2.MSYS2
+C:\msys64\usr\bin\bash -lc "pacman -S --noconfirm \
+  mingw-w64-ucrt-x86_64-{gcc,cmake,ninja,gtest,gdb}"
+# GenUT를 실행하는 셸의 PATH 앞에
+# C:\msys64\ucrt64\bin 을 넣는다</pre></div>
+<div class="card"><b>Linux (Debian/Ubuntu)</b>
+<pre class="term" style="margin:6px 0 0">sudo apt install cmake g++ libgtest-dev gdb</pre>
+<span>MinGW에는 ASan/UBSan이 없어 <code>[gtest] sanitizers</code>는 Linux에서만 의미가 있습니다. 새니타이저가 없으면 크래시는 gdb 백트레이스로 분석합니다.</span></div>
+</div>
+
+<h3>4.4 GenUT 홈 만들기: <code>genut init</code></h3>
+<pre class="term">$ genut init --home ~/.genut
+GENUT_HOME: ~/.genut
+  만듦: ~/.genut/config.toml
+  만듦: ~/.genut/rules/common.md
+  만듦: ~/.genut/rules/gtest.md
+  만듦: ~/.genut/rules/kunit.md
+다음: genut product add &lt;이름&gt; --root &lt;소스 트리&gt; --backend gtest|kunit</pre>
+<details class="art"><summary><span class="f">~/.genut/config.toml</span><span class="d">genut init이 만드는 공통 설정 (주석에 설명)</span></summary><pre># $GENUT_HOME/config.toml — 모든 프로덕트 공통 설정 (설계 12장)
+# 값을 지우면 내장 기본값이 쓰입니다. 프로덕트별 값은 products/&lt;이름&gt;/product.toml에 둡니다.
+
+[llm]
+provider = "anthropic"            # "anthropic" | "openai_compat" | "fake"
+model = "claude-opus-5-5"         # anthropic provider 모델
+temperature = 0.2                 # openai_compat에만 적용
+prompt_language = "en"            # 역할 지시문 언어. 규칙 md는 한국어 그대로 삽입
+code_format = "json"              # "json" | "fenced"
+
+[llm.anthropic]
+api_key_env = "ANTHROPIC_API_KEY"
+effort = "medium"                 # low | medium | high | xhigh | max
+fallbacks = "default"             # 거절 시 서버 측 대체 모델. "" 이면 끔
+
+[llm.openai_compat]
+base_url = "http://gemma4.internal/v1"
+model = "gemma-4-12b"
+api_key_env = "GENUT_LLM_KEY"
+max_context = 32768
+supports_json_schema = true
+supports_n = false
+
+[llm.context]
+output_reserve_tokens = 6000
+context_safety_margin = 0.05
+token_counter = "estimate"
+
+# [budget] 의 기본값은 백엔드에 따라 다릅니다(KUnit은 빌드가 느려 더 작게 잡음).
+# 공통으로 바꾸고 싶은 값만 주석을 풀어 쓰세요.
+[budget]
+# candidates = 1
+# max_iterations = 4
+# max_case_fixes = 2
+# max_tokens_per_function = 300000
+# max_coverage_rounds = 3
+
+[coverage]
+enabled = true
+target_line_percent = 100
+
+[knowledge]
+auto_promote_after_products = 2
+# note_keeper = true             # 실행이 끝나면 Note Keeper가 다음 생성에 도움이 될 노트를 남긴다
+# max_notes_per_run = 5</pre></details>
+
+<h3>4.5 LLM provider 설정</h3>
+<div class="tbl"><table>
+<tr><th>provider</th><th>언제</th><th>설정</th><th>키</th></tr>
+<tr><td><code>anthropic</code></td><td>샘플·평가 코퍼스 (외부 API)</td><td><code>[llm] model</code>, <code>[llm.anthropic] effort</code></td><td><code>ANTHROPIC_API_KEY</code></td></tr>
+<tr><td><code>openai_compat</code></td><td><b>실제 프로덕트 코드</b> (사내 Gemma 4)</td><td><code>[llm.openai_compat] base_url</code>, <code>model</code>, <code>max_context</code>, <code>supports_json_schema</code></td><td><code>GENUT_LLM_KEY</code> (<code>api_key_env</code>로 이름 변경)</td></tr>
+<tr><td><code>fake</code></td><td>테스트·문서 예시·재현</td><td><code>[llm.fake] script = "응답.json"</code></td><td>없음</td></tr>
+</table></div>
+<div class="callout warn"><p><b>데이터 정책</b>: 외부 API(Claude)로는 샘플·평가 코퍼스만 처리합니다. 실제 프로덕트 코드는 사내 Gemma 4(<code>openai_compat</code>)로만 처리하세요. <b>키는 설정 파일이나 채팅에 쓰지 말고</b> 환경 변수로만 넣으세요 (Windows: 시스템 속성 → 환경 변수의 사용자 변수, Linux: <code>~/.bashrc</code>에 <code>export ...</code>).</p></div>
+<div class="grid2">
+<div class="card"><b>사내 Gemma 4 예</b>
+<pre style="margin:6px 0 0">[llm]
+provider = "openai_compat"
+code_format = "fenced"   # 코드가 든 JSON이 자주 깨지면
+
+[llm.openai_compat]
+base_url = "http://gemma4.internal/v1"
+model = "gemma-4-12b"
+api_key_env = "GENUT_LLM_KEY"
+max_context = 32768
+supports_json_schema = true
+
+[budget]
+candidates = 3           # 후보 3개에서 케이스 단위로 고름</pre></div>
+<div class="card"><b>fake provider 응답 스크립트 (이 문서의 예시)</b>
+<pre style="margin:6px 0 0">{
+  "analyzer":    [{"testable": true, "cautions": [...], ...}],
+  "test_writer": [{"cases": [{"name": "test_rb_push_ok",
+                   "purpose": "...", "body": "..."}],
+                   "helpers": []}, ...],
+  "fixer":       [{"strategy": "fix_case", "body": "...",
+                   "evidence": ":34", ...}],
+  "reviewer":    [{"findings": []}],
+  "note_keeper": [{"notes": [...]}]
+}</pre>
+<span>역할별 목록을 순서대로 쓰고, 마지막 응답은 계속 반복합니다. 없는 역할은 스키마를 만족하는 최소 응답이 나갑니다.</span></div>
+</div>
+
+<h3>4.6 프로덕트 등록 (gtest)</h3>
+<pre class="term">$ genut product add sample --root ~/work/sample --backend gtest --home ~/.genut
+등록: sample  소스 트리 ~/work/sample
+프로덕트 폴더: ~/.genut/products/sample
+설정 파일을 채우세요: ~/.genut/products/sample/product.toml</pre>
+<p><code>product.toml</code>에 링크할 CMake 타깃을 적습니다. 대상 함수가 다른 라이브러리의 함수를 부르면 그 타깃도 넣습니다(이 예에서 <code>rb_push</code>는 <code>slot.c</code>의 <code>rb_alloc_slot</code>을 부르므로 <code>rbslot</code>도). 비우면 GenUT가 CMake File API로 대상 소스가 속한 타깃을 찾습니다.</p>
+<pre>[product]
+name = "sample"
+root = "~/work/sample"
+backend = "gtest"
+
+[gtest]
+link_targets = ["rb", "rbslot"]</pre>
+<div class="tbl"><table>
+<tr><th><code>[gtest]</code> 키</th><th>기본값</th><th>설명</th></tr>
+<tr><td><code>cmake_source_dir</code></td><td><code>.</code></td><td>최상위 <code>CMakeLists.txt</code> 위치 (프로덕트 루트 기준)</td></tr>
+<tr><td><code>cmake_build_dir</code></td><td><code>build-genut</code></td><td>GenUT 전용 빌드 디렉터리</td></tr>
+<tr><td><code>cmake_configure_args</code></td><td><code>[]</code></td><td>전용 빌드 구성에 더할 <code>-D</code> 옵션</td></tr>
+<tr><td><code>output_dir</code>, <code>cmake_lists_dir</code></td><td><code>tests/generated</code></td><td>테스트 파일과 관리 CMakeLists 설치 위치</td></tr>
+<tr><td><code>test_file_pattern</code></td><td><code>{src}_{func}_test.cc</code></td><td>테스트 파일 이름</td></tr>
+<tr><td><code>link_targets</code></td><td><code>[]</code></td><td>링크할 사용자 타깃</td></tr>
+<tr><td><code>sanitizers</code></td><td><code>[]</code></td><td><code>["address", "undefined"]</code> (Linux)</td></tr>
+<tr><td><code>coverage_opt_level</code></td><td><code>O0</code></td><td>전용 빌드 최적화 수준</td></tr>
+<tr><td><code>crash_backtrace</code></td><td><code>gdb</code></td><td>새니타이저 없는 크래시에 gdb 백트레이스</td></tr>
+<tr><td><code>test_timeout_sec</code></td><td>60</td><td>테스트 실행 하나의 시간 상한</td></tr>
+</table></div>
+
+<h4>사용자 CMakeLists를 고치지 않고 테스트를 붙이는 방법</h4>
+<figure class="fig"><div class="scroll"><svg viewBox="0 0 920 210" role="img" aria-label="CMake 주입 구조. GenUT는 사용자 CMakeLists.txt를 그대로 둔 채 전용 빌드 디렉터리를 CMAKE_PROJECT_INCLUDE 옵션으로 구성한다. 주입 파일이 project() 직후 실행되어 최상위 처리가 끝날 때 작업 중인 테스트 CMakeLists를 include하고, 테스트 실행 파일이 사용자 타깃과 GTest에 링크된다. 설치 뒤에는 사용자가 add_subdirectory 한 줄로 자기 빌드에도 붙일 수 있다">
+<defs><marker id="f6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="bx" x="10" y="30" width="190" height="96" rx="8"/><text class="t" x="22" y="52">사용자 CMakeLists.txt</text><text class="ms" x="22" y="72">project(genut_sample C CXX)</text><text class="ms" x="22" y="88">add_library(rb ...)</text><text class="ms" x="22" y="104">add_library(rbslot ...)</text><text class="okt" x="22" y="120" font-size="11">그대로 둠</text>
+<rect class="hi" x="236" y="30" width="200" height="96" rx="8"/><text class="t" x="248" y="52">cmake 구성 (GenUT)</text><text class="ms" x="248" y="72">-B build-genut</text><text class="ms" x="248" y="88">-DCMAKE_PROJECT_INCLUDE=</text><text class="ms" x="248" y="104">  genut-inject.cmake</text><text class="ms" x="248" y="120">--coverage -O0</text>
+<rect class="hi" x="472" y="30" width="200" height="96" rx="8"/><text class="t" x="484" y="52">genut-inject.cmake</text><text class="s" x="484" y="72">project() 직후 실행</text><text class="s" x="484" y="88">최상위 처리가 끝나면</text><text class="ms" x="484" y="104">include(genut-src/</text><text class="ms" x="484" y="120">  CMakeLists.txt)</text>
+<rect class="ok" x="708" y="30" width="202" height="96" rx="8"/><text class="t" x="720" y="52">테스트 실행 파일</text><text class="ms" x="720" y="72">genut_ring_buffer_rb_push</text><text class="s" x="720" y="90">← rb, rbslot</text><text class="s" x="720" y="106">← GTest::gtest_main</text>
+<line class="ln" x1="200" y1="78" x2="234" y2="78" marker-end="url(#f6a)"/><line class="ln" x1="436" y1="78" x2="470" y2="78" marker-end="url(#f6a)"/><line class="ln" x1="672" y1="78" x2="706" y2="78" marker-end="url(#f6a)"/>
+<rect class="warn" x="236" y="150" width="436" height="48" rx="8"/><text class="t" x="248" y="170">설치 뒤 (선택): 루트 CMakeLists.txt에 한 줄</text><text class="ms" x="248" y="188">add_subdirectory(tests/generated)</text><text class="s" x="490" y="188">→ 사용자 빌드에서도 같은 테스트</text>
+<path class="ln dash" d="M105,126 L105,174 L234,174" marker-end="url(#f6a)"/>
+</svg></div><figcaption>그림 6. gtest 백엔드의 CMake 주입. 작업 중에는 프로덕트 트리에 아무것도 쓰지 않고, 설치 때만 <code>tests/generated/</code>에 씁니다.</figcaption></figure>
+<details class="art"><summary><span class="f">build-genut/genut-inject.cmake</span><span class="d">GenUT가 만드는 주입 파일</span></summary><pre># GenUT 주입 파일 (자동 생성). 최상위 project() 직후 실행되고, 최상위 처리가 끝날 때 작업 디렉터리의
+# CMakeLists.txt를 include 한다. 그때는 사용자 타깃과 디렉터리 설정이 모두 정의되어 있다.
+# (지연 실행에서는 add_subdirectory를 쓸 수 없다)
+if(NOT COMMAND genut_add_work_tests)
+  enable_language(CXX)
+  function(genut_add_work_tests)
+    include("${GENUT_WORK_DIR}/CMakeLists.txt")
+  endfunction()
+  cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL genut_add_work_tests)
+endif()</pre></details>
+
+<h3>4.7 환경 점검: <code>genut doctor</code></h3>
+<pre class="term">$ genut doctor --home ~/.genut
+[OK]   GENUT_HOME: ~/.genut
+[OK]   설정 출처: 내장 기본값 &lt; ~/.genut/config.toml &lt; ~/.genut/products/sample/product.toml
+[OK]   libclang: ~/GenUT/.venv/Lib/site-packages/clang/native/libclang.dll
+[OK]   LLM: fake provider (테스트용)
+[OK]   프로덕트: sample · gtest · ~/work/sample
+[OK]   로드되는 규칙: ~/.genut/rules/common.md, ~/.genut/rules/gtest.md
+[OK]   로드되는 지식: 공통 0개 · 프로덕트 0개 · 공통 후보 0개 (~/.genut/knowledge/global.md, ~/.genut/products/sample/knowledge/product.md)
+[OK]   cmake: C:\msys64\ucrt64\bin\cmake.EXE
+[OK]   CMakeLists.txt: ~/work/sample/CMakeLists.txt
+[OK]   커버리지 도구: C:\msys64\ucrt64\bin\gcov.EXE
+[경고] add_subdirectory: 루트 CMakeLists.txt에 tests/generated가 연결되어 있지 않습니다. GenUT 빌드는 주입 방식으로 동작합니다.
+        해결: 사용자 빌드에서도 쓰려면 루트 CMakeLists.txt에 add_subdirectory(tests/generated)를 한 줄 추가하세요.
+[OK]   생성 위치: CMakeLists: ~/work/sample/tests/generated · 테스트: ~/work/sample/tests/generated
+
+문제 없음</pre>
+<p><code>[실패]</code>가 있으면 표시된 해결 방법을 따르세요(종료 코드 1).</p>
+
+<h3>4.8 KUnit 프로덕트 셋업</h3>
+<p>KUnit은 GenUT가 커널을 직접 빌드하지 않고 <b>사용자 스크립트</b>를 다음 계약으로 부릅니다(자세히는 <a href="kunit-script.md">docs/kunit-script.md</a>).</p>
+<pre class="term">&lt;script&gt; &lt;test_file&gt; --mode build|run|all [--filter &lt;suite&gt;.&lt;case&gt;] --log &lt;path&gt; [--coverage-out &lt;dir&gt;]
+종료 코드: 0 실행 끝(테스트 실패여도 0) · 10 빌드 실패 · 20 부팅·실행 실패 · 그 외 스크립트 오류</pre>
+<figure class="fig"><div class="scroll"><svg viewBox="0 0 920 186" role="img" aria-label="KUnit 호출 구조. GenUT가 함수별 테스트 파일과 집합 파일을 커널 트리에 쓰고 스크립트를 mode 인자로 부른다. 스크립트는 커널을 빌드하고 QEMU에서 실행해 전체 로그와 커버리지 파일을 남긴다. GenUT는 로그에서 KTAP 결과와 oops, KASAN 보고를 읽는다">
+<defs><marker id="f7a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="hi" x="10" y="40" width="170" height="80" rx="8"/><text class="t" x="22" y="62">GenUT</text><text class="s" x="22" y="80">tests/*_test.c 작성</text><text class="s" x="22" y="96">foo_kunit.c 다시 씀</text><text class="s" x="22" y="112">스크립트 호출</text>
+<rect class="warn" x="230" y="40" width="190" height="80" rx="8"/><text class="t" x="242" y="62">실행 스크립트 (사람)</text><text class="ms" x="242" y="80">--mode build|run|all</text><text class="ms" x="242" y="96">--log &lt;path&gt;</text><text class="ms" x="242" y="112">[--coverage-out &lt;dir&gt;]</text>
+<rect class="bx" x="470" y="40" width="190" height="80" rx="8"/><text class="t" x="482" y="62">커널 빌드 + QEMU</text><text class="s" x="482" y="80">kunit.py build / exec</text><text class="s" x="482" y="96">CONFIG_KUNIT · GCOV</text><text class="s" x="482" y="112">약 8분/회</text>
+<rect class="ok" x="710" y="40" width="200" height="80" rx="8"/><text class="t" x="722" y="62">로그 · 커버리지</text><text class="s" x="722" y="80">KTAP · oops · KASAN</text><text class="ms" x="722" y="96">&lt;dir&gt;/coverage.info</text><text class="s" x="722" y="112">종료 코드 0/10/20</text>
+<line class="ln" x1="180" y1="80" x2="228" y2="80" marker-end="url(#f7a)"/><line class="ln" x1="420" y1="80" x2="468" y2="80" marker-end="url(#f7a)"/><line class="ln" x1="660" y1="80" x2="708" y2="80" marker-end="url(#f7a)"/>
+<path class="ln dash" d="M810,120 L810,150 L95,150 L95,122" marker-end="url(#f7a)"/><text class="s" x="300" y="170">GenUT가 로그를 읽어 케이스별 결과·크래시 브리프·커버리지를 만든다</text>
+</svg></div><figcaption>그림 7. KUnit 백엔드의 호출 구조.</figcaption></figure>
+<div class="step">
+<div class="head"><span class="num">1</span><b>집합 파일 등록 (한 번)</b><span class="who">Makefile · Kconfig</span></div>
+<pre style="margin-bottom:8px"># drivers/foo/Makefile
+obj-$(CONFIG_FOO_KUNIT_TEST) += foo_kunit.o
+GCOV_PROFILE_foo.o := y          # 라인 커버리지를 쓸 때
+
+# drivers/foo/Kconfig
+config FOO_KUNIT_TEST
+	tristate "KUnit tests for foo" if !KUNIT_ALL_TESTS
+	depends on KUNIT &amp;&amp; FOO
+	default KUNIT_ALL_TESTS</pre>
+</div>
+<div class="step">
+<div class="head"><span class="num">2</span><b>커널 설정과 compile DB</b></div>
+<p><code>CONFIG_KUNIT=y</code>, <code>CONFIG_FOO_KUNIT_TEST=y</code>. 권장 <code>CONFIG_KASAN=y</code>, <code>CONFIG_UBSAN=y</code>, <code>CONFIG_DEBUG_INFO=y</code>. 커버리지는 <code>CONFIG_GCOV_KERNEL=y</code>. 커널 트리에서 <code>make compile_commands.json</code> (없으면 <code>.&lt;이름&gt;.o.cmd</code>를 읽음).</p>
+</div>
+<div class="step">
+<div class="head"><span class="num">3</span><b>실행 스크립트</b></div>
+<p><code>tools/testing/kunit/kunit.py</code>를 감싼 예시가 <a href="kunit-script.md">docs/kunit-script.md</a>에 있습니다. 빌드 실패면 컴파일러 출력을, 실행이면 커널 로그 전체를 <code>--log</code> 파일에 써야 GenUT가 오류를 케이스에 귀속할 수 있습니다.</p>
+</div>
+<div class="step">
+<div class="head"><span class="num">4</span><b><code>product.toml</code></b></div>
+<pre style="margin-bottom:8px">[product]
+name = "foo-driver"
+root = "/work/linux"
+backend = "kunit"
+
+[kunit]
+compile_commands = "compile_commands.json"
+test_file = "drivers/foo/foo_kunit.c"      # 집합 파일 (1에서 등록)
+test_dir = "drivers/foo/tests"             # 함수별 테스트 파일 위치
+run_script = "scripts/kunit_build_run.sh"
+script_supports_filter = false             # --filter 지원 시 true (격리가 빨라짐)
+script_timeout_sec = 3600
+vmlinux = ""                               # 있으면 크래시 주소를 줄 번호로
+static_access = "stub_tool"                # 스텁 도구가 없으면 "include_source"</pre>
+</div>
+<div class="step">
+<div class="head"><span class="num">5</span><b>점검</b></div>
+<p><code>genut doctor --product foo-driver</code>가 집합 파일 등록, Kconfig 심볼, <code>CONFIG_GCOV_KERNEL</code>, <code>GCOV_PROFILE</code>을 점검합니다. KUnit은 빌드 한 번이 수 분이라 예산 기본값이 작고, 검증 라운드마다 빌드와 실행을 <code>--mode all</code> 한 번으로 합니다.</p>
+</div>
+
+<h3>4.9 규칙 md 쓰기</h3>
+<p>규칙 md는 <b>모든 에이전트의 시스템 프롬프트에 그대로</b> 들어갑니다. 짧고 검사 가능한 문장으로 쓰세요(공통+백엔드 합쳐 100줄 이내 권장).</p>
+<div class="tbl"><table>
+<tr><th>파일</th><th>범위</th></tr>
+<tr><td><code>~/.genut/rules/common.md</code> + <code>gtest.md</code> 또는 <code>kunit.md</code></td><td>모든 프로덕트 공통</td></tr>
+<tr><td><code>~/.genut/products/&lt;이름&gt;/rules/common.md</code> + <code>&lt;backend&gt;.md</code></td><td>그 프로덕트만 (충돌하면 이쪽이 우선)</td></tr>
+</table></div>
+<div class="tbl"><table>
+<tr><th>GenUT가 읽는 제목 (바꾸지 말 것)</th><th>쓰임</th></tr>
+<tr><td><code>## 반드시 스텁</code></td><td>백틱 안의 이름·glob(<code>readl</code>, <code>*_hw_*</code>)은 정의가 있어도 스텁 대상</td></tr>
+<tr><td><code>## 리뷰에서 거부할 패턴</code></td><td>백틱 안의 정규식이 케이스 본문에 있으면 거부 (<code>rejected_pattern</code>)</td></tr>
+</table></div>
+<details class="art"><summary><span class="f">rules/common.md</span><span class="d">기본 템플릿</span></summary><pre># 공통 규칙
+
+GenUT가 모든 에이전트 프롬프트에 그대로 넣는 규칙입니다. 꼭 지켜야 할 것만 짧게 적으세요(백엔드 규칙과 합쳐 100줄 이내 권장).
+아래 제목 이름은 GenUT가 읽어서 검사에도 씁니다. 제목은 바꾸지 마세요.
+
+## 반드시
+- 테스트 이름: test_&lt;함수명&gt;_&lt;상황&gt;. 예: test_rb_push_when_full
+- 케이스는 서로 독립적이어야 한다. 다른 케이스의 결과에 기대지 않는다.
+- 케이스마다 대상 함수를 호출하고, 의미 있는 단정을 하나 이상 둔다.
+
+## 절대 금지
+- 작업 디렉터리 밖의 파일 접근, 네트워크 접근.
+- sleep 등 시간에 의존하는 테스트.
+
+## 반드시 스텁
+&lt;!-- 백틱 안의 이름이나 glob 패턴은 정의가 있어도 항상 스텁 대상이 됩니다. 예: `readl` `*_hw_*` --&gt;
+
+## 리뷰에서 거부할 패턴
+&lt;!-- 백틱 안의 정규식은 케이스 본문에서 발견되면 거부됩니다. --&gt;
+- `EXPECT_TRUE\(\s*true\s*\)`
+- `KUNIT_EXPECT_TRUE\(\s*test\s*,\s*true\s*\)`
+
+## 커버리지 최소
+- 정상 경로 1개, 오류 반환 경로 1개, NULL 또는 경계값 1개.</pre></details>
+<details class="art"><summary><span class="f">rules/kunit.md</span><span class="d">KUnit 템플릿</span></summary><pre># KUnit 규칙
+
+## 반드시
+- 메모리 할당은 kunit_kzalloc(test, ...)만 사용한다. kmalloc/kfree 직접 호출 금지.
+- static 함수 접근은 스텁 도구가 제공하는 방식을 따른다.
+
+## 절대 금지
+- readl/writel/ioremap 등 MMIO 직접 호출. 반드시 스텁 도구로 대체.
+- msleep/udelay 등 시간 의존 코드.
+- 전역 변수를 바꾼 채로 끝내는 케이스.
+
+## 반드시 스텁
+- `readl` `writel` `ioremap`
+
+## 리뷰에서 거부할 패턴
+- `\bkmalloc\(`
+- `\bkfree\(`</pre></details>
+
+<h3>4.10 역할 지시문 바꾸기 (선택)</h3>
+<p>에이전트의 역할 지시문은 패키지 기본값(<code>src/genut/agents/prompts/&lt;en|ko&gt;/&lt;role&gt;.md</code>)을 씁니다. <code>~/.genut/prompts/&lt;role&gt;.md</code>를 만들면 그 파일의 내용이 기본값을 덮어씁니다(없는 절은 기본값).</p>
+<div class="tbl"><table>
+<tr><th>역할 파일</th><th>절 (<code>## 이름</code>)</th></tr>
+<tr><td><code>analyzer.md</code>, <code>fixer.md</code>, <code>reviewer.md</code>, <code>unreachable.md</code>, <code>note_keeper.md</code></td><td><code>task</code> (fixer는 <code>shared_blocked</code>도)</td></tr>
+<tr><td><code>test_writer.md</code></td><td><code>smoke</code>, <code>expand</code>, <code>coverage</code>, <code>example.gtest</code>, <code>example.kunit</code></td></tr>
+</table></div>
+<p>첫 <code>## </code> 앞은 역할 지시문(시스템 프롬프트)입니다. <code>$function</code>, <code>$function_id</code>, <code>$framework</code>, <code>$language</code>, <code>$wrapper</code> 자리표시자를 쓸 수 있고 <code>&lt;!-- --&gt;</code> 주석은 들어가지 않습니다. 언어는 <code>[llm] prompt_language = "en" | "ko"</code>.</p>
+</details>
+
+<!-- ============================================================ 5 -->
+<details class="sec" id="s5" open>
+<summary><span class="n">5</span>명령어 사용법</summary>
+<div class="tbl"><table>
+<tr><th>명령</th><th>하는 일</th><th>주요 옵션</th></tr>
+<tr><td><code>genut init</code></td><td><code>$GENUT_HOME</code>에 <code>config.toml</code>과 규칙 템플릿 생성</td><td><code>--force</code></td></tr>
+<tr><td><code>genut product add &lt;이름&gt; --root &lt;경로&gt;</code></td><td>프로덕트 등록, 프로덕트 폴더 생성</td><td><code>--backend gtest|kunit</code></td></tr>
+<tr><td><code>genut product list</code> / <code>remove &lt;이름&gt;</code></td><td>목록 / 해제</td><td><code>--delete-data</code></td></tr>
+<tr><td><code>genut doctor</code></td><td>환경 점검</td><td></td></tr>
+<tr><td><code>genut gen --file F</code></td><td>테스트 생성</td><td><code>--func</code>(여러 번), <code>--backend</code>, <code>--out</code>, <code>--dry-run</code>, <code>--stop-after</code>, <code>--set</code></td></tr>
+<tr><td><code>genut show [RUN]</code></td><td>실행 요약</td><td></td></tr>
+<tr><td><code>genut view [RUN]</code></td><td>실행 하나를 단일 HTML로</td><td><code>--no-open</code></td></tr>
+<tr><td><code>genut diff [RUN1 [RUN2]]</code></td><td>두 실행 비교 (생략하면 <code>latest~1</code>과 <code>latest</code>)</td><td><code>--json</code></td></tr>
+<tr><td><code>genut replay RUN</code></td><td>기록된 LLM 응답으로 다시 실행 (LLM 비용 없음)</td><td><code>--from STAGE</code>, <code>--set</code></td></tr>
+<tr><td><code>genut finalize [RUN]</code></td><td>중단·미확인 실행의 통과 케이스로 최종 확인만 다시 해서 설치</td><td></td></tr>
+<tr><td><code>genut eval</code></td><td>코퍼스 성공률 측정, 기준치와 비교 (설치하지 않음)</td><td><code>--corpus</code>, <code>--label</code>, <code>--save-baseline</code>, <code>--compare</code>, <code>--open</code></td></tr>
+<tr><td><code>genut knowledge list</code></td><td>지식 노트 목록</td><td><code>--scope</code>, <code>--candidates</code></td></tr>
+<tr><td><code>genut knowledge promote|demote &lt;id&gt;</code></td><td>노트 범위 변경</td><td>promote <code>--force</code></td></tr>
+<tr><td><code>genut knowledge edit</code></td><td>노트 파일을 <code>$VISUAL</code>/<code>$EDITOR</code>로 열기</td><td><code>--scope</code></td></tr>
+</table></div>
+<div class="grid2">
+<div class="card"><b>공통 옵션</b><span><code>--home PATH</code>(GENUT_HOME 대신), <code>--product/-p NAME</code>(생략하면 현재 디렉터리가 속한 등록 소스 트리로 자동 탐지).</span></div>
+<div class="card"><b>실행 가리키기</b><span><code>latest</code>, <code>latest~N</code>(N개 전), 실행 ID(앞부분만 줘도 됨), 실행 디렉터리 경로.</span></div>
+<div class="card"><b>대상 함수 (<code>--func</code>)</b><span>이름(<code>rb_push</code>), <code>Class::method</code>, 완전한 이름(<code>demo::Counter::add</code>), 키(<code>Counter_add</code>, 오버로드 <code>Counter_Counter_2</code>). 생략하면 비static 자유 함수와 public 멤버 함수(생성자 제외).</span></div>
+<div class="card"><b><code>--stop-after</code></b><span><code>analyze</code>, <code>stub</code>, <code>preflight</code>, <code>smoke</code>, <code>expand</code>, <code>fix</code>, <code>coverage</code>, <code>review</code>. 그 단계 뒤에 멈추고 설치하지 않음. 이어서 <code>genut finalize</code>.</span></div>
+</div>
+<h4>설정 겹쳐 올리기 (<code>--set key=value</code>)</h4>
+<div class="layers">
+  <div class="layer hi"><b>--set budget.max_case_fixes=3 --set gtest.link_targets=[rb,rbslot]</b><span>가장 우선</span></div>
+  <div class="layer"><b>~/.genut/products/&lt;이름&gt;/product.toml</b><span>프로덕트</span></div>
+  <div class="layer"><b>~/.genut/config.toml</b><span>공통</span></div>
+  <div class="layer"><b>백엔드 기본값</b><span>KUnit은 빌드가 느려 예산이 작음</span></div>
+  <div class="layer"><b>내장 기본값</b><span>src/genut/config.py</span></div>
+</div>
+<p>위가 아래를 덮어씁니다. 모르는 키는 오류입니다(오타 방지). <code>genut doctor</code>의 "설정 출처" 줄에서 실제로 읽은 파일을 볼 수 있습니다.</p>
+</details>
+
+<!-- ============================================================ 6 -->
+<details class="sec" id="s6" open>
+<summary><span class="n">6</span>따라 하기: 샘플 프로젝트로 gtest 생성</summary>
+<p>대상은 샘플 프로젝트의 링 버퍼 함수 <code>rb_push</code>입니다. 반환 지점이 넷(<code>:31</code> EINVAL, <code>:34</code> ENOSPC, <code>:38</code> ENOMEM, <code>:42</code> OK)이고, 다른 라이브러리(<code>rbslot</code>)의 <code>rb_alloc_slot</code>을 부릅니다.</p>
+<pre>int rb_push(struct rb *rb, const void *data, size_t len)
+{
+	unsigned char *slot;
+
+	if (rb == NULL || data == NULL)
+		return RB_EINVAL;              /* :31 */
+	if (rb_free_space(rb) &lt; len) {
+		stats.full_count++;
+		return RB_ENOSPC;              /* :34 */
+	}
+	slot = rb_alloc_slot(rb, len);     /* slot.c (rbslot 타깃) */
+	if (slot == NULL)
+		return RB_ENOMEM;              /* :38 */
+	memcpy(slot, data, len);
+	rb-&gt;tail += len;
+	stats.push_count++;
+	return RB_OK;                      /* :42 */
+}</pre>
+
+<h3>6.0 준비와 미리 보기</h3>
+<p>4장대로 <code>genut init</code>, <code>genut product add sample --root ~/work/sample</code>, <code>product.toml</code>에 <code>link_targets = ["rb", "rbslot"]</code>, <code>genut doctor</code>까지 마칩니다. 처음에는 LLM·빌드 없이 프롬프트만 만드는 <code>--dry-run</code>으로 규칙과 분석이 의도대로 들어가는지 봅니다.</p>
+<pre class="term">$ genut gen --file src/ring_buffer.c --func rb_push --dry-run --home ~/.genut
+[1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개
+[2/8] 스텁     rb_push: 스텁 0개
+[4/8] 스모크    rb_push: 케이스 0개 생성
+[4/8] 스모크    rb_push: 통과 0 · 실패 0 · 제거 0
+[5/8] 확장     rb_push: 케이스 0개 생성
+[5/8] 확장     rb_push: 통과 0 · 실패 0 · 제거 0
+[6/8] 수정     rb_push: 통과 0 · 실패 0 · 제거 0
+[7/8] 커버리지   dry-run이라 측정하지 않음
+[확인] rb_push: none · 최종 확인 -
+[참고] rb_push: Analyzer가 테스트 불가로 판정했지만 코드가 확인한 신호가 없어 진행합니다: 
+완료 · 빌드 0 · 토큰 5362 · 2s → ~/.genut/products/sample/runs/20261022-154246-ring_buffer-rb_push</pre>
+<details class="art"><summary><span class="f">genut gen --stop-after analyze</span><span class="d">파일의 모든 함수를 분석만 하고 멈추기</span></summary><pre class="term">$ genut gen --file src/ring_buffer.c --stop-after analyze --home ~/.genut
+[1/8] 분석     int rb_init(struct rb *rb, unsigned char *buf, size_t cap) · 호출 0개 · 스텁 필요 0개
+[1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개
+[1/8] 분석     size_t rb_used(const struct rb *rb) · 호출 0개 · 스텁 필요 0개
+[1/8] 분석     const char *rb_state_name(int state) · 호출 0개 · 스텁 필요 0개
+[확인] rb_init: none · 최종 확인 -
+[확인] rb_push: none · 최종 확인 -
+[확인] rb_used: none · 최종 확인 -
+[확인] rb_state_name: none · 최종 확인 -
+완료 · 빌드 0 · 토큰 6316 · 0s → ~/.genut/products/sample/runs/20261022-154313-ring_buffer</pre></details>
+
+<h3>6.1 생성 실행</h3>
+<pre class="term">$ genut gen --file src/ring_buffer.c --func rb_push --home ~/.genut
+[1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개
+[2/8] 스텁     rb_push: 스텁 0개
+[3/8] 사전검증   뼈대 빌드 OK (1.1s)
+[4/8] 스모크    rb_push: 케이스 1개 생성
+[4/8] 스모크    rb_push: 통과 1 · 실패 0 · 제거 0
+[5/8] 확장     rb_push: 케이스 3개 생성
+[6/8] 수정     round 1: fix_case(test_rb_push_full) → 재검증 · fix_case(test_rb_push_exact_fit) → 재검증
+[5/8] 확장     rb_push: 통과 4 · 실패 0 · 제거 0
+[6/8] 수정     rb_push: 통과 4 · 실패 0 · 제거 0
+[7/8] 커버리지   rb_push: 라인 92% (12/13) · 미커버 :38
+[7/8] 커버리지   rb_push: 케이스 1개 생성
+[7/8] 커버리지   rb_push: 라인 100% (13/13)
+[8/8] 리뷰     rb_push: 지적 0건
+[노트] 2개 저장 (프로덕트 1 · 공통 후보 1 · 공통 0)
+[확인] rb_push: complete · 최종 확인 ok → ~/work/sample/tests/generated/ring_buffer_rb_push_test.cc
+완료 · 빌드 6 · 토큰 17614 · 10s → ~/.genut/products/sample/runs/20261022-154248-ring_buffer-rb_push</pre>
+
+<h3 id="w-timeline">6.2 이번 실행의 빌드 타임라인</h3>
+<figure class="fig"><div class="scroll"><svg viewBox="0 0 940 330" role="img" aria-label="이번 실행의 빌드 타임라인. 빌드 1은 사전검증으로 뼈대만 통과. 빌드 2 스모크에서 test_rb_push_ok 통과. 빌드 3 확장에서 ok와 null 통과, full 단정 실패, exact_fit 크래시. 격리 재실행과 gdb로 크래시 브리프를 만들고 Fixer가 두 케이스를 고침. 빌드 4 재검증에서 넷 모두 통과. 커버리지 92퍼센트, 38행 미커버. 빌드 5에서 nomem 추가로 100퍼센트. 리뷰 지적 없음. 빌드 6 최종 확인에서 다섯 케이스 통과 후 설치와 노트 저장">
+<rect class="pane" x="8" y="8" width="924" height="314" rx="10"/>
+<text class="s" x="20" y="34">케이스 \ 빌드</text>
+<g text-anchor="middle">
+<text class="t" x="245" y="30">b1</text><text class="s" x="245" y="46">③ 사전검증</text>
+<text class="t" x="365" y="30">b2</text><text class="s" x="365" y="46">④ 스모크 r1</text>
+<text class="t" x="485" y="30">b3</text><text class="s" x="485" y="46">⑤ 확장 r2</text>
+<text class="t" x="605" y="30">b4</text><text class="s" x="605" y="46">⑥ 재검증 r3</text>
+<text class="t" x="725" y="30">b5</text><text class="s" x="725" y="46">⑦ 커버리지 r4</text>
+<text class="t" x="855" y="30">b6</text><text class="s" x="855" y="46">최종 확인</text>
+</g>
+<g class="m"><text x="20" y="82">test_rb_push_ok</text><text x="20" y="114">test_rb_push_full</text><text x="20" y="146">test_rb_push_null</text><text x="20" y="178">test_rb_push_exact_fit</text><text x="20" y="210">test_rb_push_nomem</text></g>
+<rect class="ok" x="190" y="64" width="110" height="156" rx="6"/><text class="okt" x="245" y="138" text-anchor="middle">뼈대만</text><text class="s" x="245" y="156" text-anchor="middle">빌드 OK</text>
+<g text-anchor="middle" font-size="11">
+<rect class="ok" x="310" y="68" width="110" height="22" rx="4"/><text x="365" y="83">pass</text>
+<rect class="ok" x="430" y="68" width="110" height="22" rx="4"/><text x="485" y="83">pass</text>
+<rect class="bad" x="430" y="100" width="110" height="22" rx="4"/><text class="badt" x="485" y="115">fail (단정)</text>
+<rect class="ok" x="430" y="132" width="110" height="22" rx="4"/><text x="485" y="147">pass</text>
+<rect class="bad" x="430" y="164" width="110" height="22" rx="4"/><text class="badt" x="485" y="179">crash (SIGSEGV)</text>
+<rect class="ok" x="550" y="68" width="110" height="22" rx="4"/><text x="605" y="83">pass</text>
+<rect class="ok" x="550" y="100" width="110" height="22" rx="4"/><text x="605" y="115">pass (고침)</text>
+<rect class="ok" x="550" y="132" width="110" height="22" rx="4"/><text x="605" y="147">pass</text>
+<rect class="ok" x="550" y="164" width="110" height="22" rx="4"/><text x="605" y="179">pass (고침)</text>
+<rect class="ok" x="670" y="68" width="110" height="22" rx="4"/><text x="725" y="83">pass</text>
+<rect class="ok" x="670" y="100" width="110" height="22" rx="4"/><text x="725" y="115">pass</text>
+<rect class="ok" x="670" y="132" width="110" height="22" rx="4"/><text x="725" y="147">pass</text>
+<rect class="ok" x="670" y="164" width="110" height="22" rx="4"/><text x="725" y="179">pass</text>
+<rect class="ok" x="670" y="196" width="110" height="22" rx="4"/><text x="725" y="211">pass (새 케이스)</text>
+<rect class="ok" x="800" y="68" width="110" height="22" rx="4"/><text x="855" y="83">pass</text>
+<rect class="ok" x="800" y="100" width="110" height="22" rx="4"/><text x="855" y="115">pass</text>
+<rect class="ok" x="800" y="132" width="110" height="22" rx="4"/><text x="855" y="147">pass</text>
+<rect class="ok" x="800" y="164" width="110" height="22" rx="4"/><text x="855" y="179">pass</text>
+<rect class="ok" x="800" y="196" width="110" height="22" rx="4"/><text x="855" y="211">pass</text>
+</g>
+<line class="ln dash" x1="20" y1="232" x2="920" y2="232" opacity=".5"/>
+<text class="s" x="20" y="252">빌드 사이에 일어난 일</text>
+<g font-size="11">
+<text x="310" y="252">스모크 통과</text><text class="s" x="310" y="268">→ 녹색 스냅샷 b2</text>
+<text x="430" y="252">격리 재실행 + gdb</text><text class="s" x="430" y="268">→ 크래시 브리프</text><text class="s" x="430" y="284">Fixer ×2 (fix_case)</text>
+<text x="550" y="252">gcov 측정 m0</text><text class="s" x="550" y="268">12/13 = 92%</text><text class="s" x="550" y="284">미커버 :38 + 도달 조건</text>
+<text x="670" y="252">gcov 측정 m1</text><text class="s" x="670" y="268">13/13 = 100%</text><text class="s" x="670" y="284">Reviewer 지적 0</text>
+<text x="800" y="252">설치 + 재측정</text><text class="s" x="800" y="268">Note Keeper 노트 2</text><text class="s" x="800" y="284">결과 complete</text>
+</g>
+<text class="s" x="20" y="310">빌드 6회 · LLM 호출 8회 (Analyzer 1, Test Writer 3, Fixer 2, Reviewer 1, Note Keeper 1) · 커버리지 측정은 빌드 없이 통과 케이스만 다시 실행</text>
+</svg></div><figcaption>그림 8. 실제 실행 <code>20261022-154248-ring_buffer-rb_push</code>의 빌드별 케이스 상태. 진행 단위가 케이스라서 b3에서 둘이 실패해도 통과한 둘은 그대로 유지됩니다.</figcaption></figure>
+
+<h3 id="w1">6.3 단계별 산출물</h3>
+
+<div class="step">
+<div class="head"><span class="num">①</span><b>분석</b><span class="who">코드(libclang) + Analyzer</span></div>
+<div class="line">[1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개</div>
+<div class="io">
+<div><b>입력</b>소스 파일, compile DB(전용 빌드 디렉터리의 것)</div>
+<div><b>하는 일</b>함수 구조 추출, 호출마다 링크 범위 판정, Analyzer의 테스트 가능 판단</div>
+<div><b>산출물</b><code>analysis/rb_push.md</code>, <code>linkscope.json</code>, <code>prompts/01-analyzer.md</code></div>
+</div>
+<p>LLM은 원본 소스 대신 이 <b>분석 보고서</b>를 받습니다. 반환 지점마다 조건이, 호출마다 링크 범위가 붙어 있어 기대값과 준비 코드를 추측하지 않아도 됩니다.</p>
+<details class="art" open><summary><span class="f">analysis/rb_push.md</span><span class="d">분석 보고서 (LLM에 들어간 그대로)</span></summary><pre># 분석 보고서: rb_push
+
+## 대상
+
+```
+int rb_push(struct rb *rb, const void *data, size_t len)   @ ~/work/sample/src/ring_buffer.c:26-43
+비static · 18줄 · 분기 3
+```
+
+## 소스 (줄 번호 포함)
+
+```
+26| int rb_push(struct rb *rb, const void *data, size_t len)
+27| {
+28| 	unsigned char *slot;
+29| 
+30| 	if (rb == NULL || data == NULL)
+31| 		return RB_EINVAL;
+32| 	if (rb_free_space(rb) &lt; len) {
+33| 		stats.full_count++;
+34| 		return RB_ENOSPC;
+35| 	}
+36| 	slot = rb_alloc_slot(rb, len);
+37| 	if (slot == NULL)
+38| 		return RB_ENOMEM;
+39| 	memcpy(slot, data, len);
+40| 	rb-&gt;tail += len;
+41| 	stats.push_count++;
+42| 	return RB_OK;
+43| }
+```
+
+## 반환 지점
+
+```
+RB_EINVAL  ((rb == NULL || data == NULL) 참)  :31
+RB_ENOSPC  ((rb_free_space(rb) &lt; len) 참)  :34
+RB_ENOMEM  ((slot == NULL) 참)  :38
+RB_OK      (조건 없음)  :42
+```
+
+## 호출과 링크 범위
+
+```
+rb_free_space (static)  same_tu  — 이 번역 단위에 정의 있음 (대상 소스)
+rb_alloc_slot  linkable  — 링크하는 타깃의 소스에 정의
+memcpy  external  — 시스템·외부 라이브러리 선언
+```
+
+## include
+
+```
+#include "rb.h"
+#include &lt;stddef.h&gt;
+```
+
+## 타입
+
+```
+struct rb { unsigned char * buf; size_t head; size_t tail; size_t cap; unsigned int magic; }   @ ~/work/sample/include/rb.h:6
+예시 초기화: struct rb x = { .buf = NULL, .head = 0, .tail = 0, .cap = 0, .magic = 0 };
+```
+
+## 전역 참조
+
+```
+struct rb_stats stats  write · static
+```
+
+## 상수
+
+```
+RB_EINVAL = -22
+RB_ENOSPC = -28
+RB_ENOMEM = -12
+RB_OK = 0
+NULL = ( ( void * ) 0 )
+```</pre></details>
+<details class="art"><summary><span class="f">linkscope.json</span><span class="d">링크 범위 판정 한 항목</span></summary><pre>{
+  "name": "rb_alloc_slot",
+  "scope": "linkable",
+  "reason": "링크하는 타깃의 소스에 정의",
+  "evidence": "~/work/sample/src/slot.c",
+  "is_static": false
+}</pre></details>
+<div class="tbl"><table>
+<tr><th>링크 범위</th><th>뜻</th></tr>
+<tr><td><code>same_tu</code></td><td>대상 소스 안에 정의 (static 함수 포함)</td></tr>
+<tr><td><code>linkable</code></td><td>링크하는 타깃의 소스에 정의 → 스텁 불필요</td></tr>
+<tr><td><code>external</code></td><td>시스템·외부 라이브러리</td></tr>
+<tr><td><code>undefined</code></td><td>어디에도 정의 없음 → 스텁 필요 (연동 전에는 그 경로를 피하라고 안내)</td></tr>
+</table></div>
+</div>
+
+<div class="step">
+<div class="head"><span class="num">②③</span><b>스텁 · 사전검증</b><span class="who">코드</span></div>
+<div class="line">[2/8] 스텁     rb_push: 스텁 0개
+[3/8] 사전검증   뼈대 빌드 OK (1.1s)</div>
+<p>정의 없는 호출이 없어 스텁은 0개. 케이스 없는 뼈대만 빌드해 include·링크·CMake가 맞는지 먼저 확인합니다. 여기서 실패하면 LLM을 한 번도 부르지 않고 멈춥니다. 같은 환경으로 다시 돌리면 <code>캐시 사용</code>으로 건너뜁니다(<code>knowledge/preflight.cache.json</code>).</p>
+</div>
+
+<div class="step" id="w4">
+<div class="head"><span class="num">④</span><b>스모크</b><span class="who">Test Writer</span></div>
+<div class="line">[4/8] 스모크    rb_push: 케이스 1개 생성
+[4/8] 스모크    rb_push: 통과 1 · 실패 0 · 제거 0</div>
+<div class="io">
+<div><b>입력</b>역할 지시문 + 규칙 md (시스템), 분석 보고서 + Analyzer 의견 + 할 일 (유저)</div>
+<div><b>하는 일</b>정상 경로 케이스 하나를 받아 빌드·실행</div>
+<div><b>산출물</b><code>prompts/02-test_writer-smoke.md</code>, <code>candidates/r1/</code></div>
+</div>
+<p>LLM 호출 하나마다 <code>prompts/NN-&lt;역할&gt;-&lt;단계&gt;.md</code>가 생기고, 맨 위에 호출 정보가 있습니다.</p>
+<details class="art" open><summary><span class="f">prompts/02-test_writer-smoke.md</span><span class="d">호출 정보</span></summary><pre>{
+  "agent": "test_writer",
+  "stage": "smoke",
+  "function": "rb_push",
+  "tokens": 2016,
+  "limit": 25129,
+  "trims": [],
+  "prompt": "genut:prompts/en/test_writer.md",
+  "prompt_hash": "2c54c8acef435712",
+  "attempts": 1,
+  "path": "native",
+  "usage": {
+    "input_tokens": 2016,
+    "output_tokens": 110
+  },
+  "model": "fake-model"
+}</pre></details>
+<div class="tbl"><table>
+<tr><th>필드</th><th>뜻</th></tr>
+<tr><td><code>tokens</code> / <code>limit</code></td><td>보낸 프롬프트의 추정 토큰 / 허용량 (컨텍스트 − 응답 자리 − 안전 여유)</td></tr>
+<tr><td><code>trims</code></td><td>한도를 맞추려고 줄이거나 뺀 조각. 비어 있으면 다 들어감</td></tr>
+<tr><td><code>prompt</code>, <code>prompt_hash</code></td><td>쓴 역할 지시문 파일과 해시</td></tr>
+<tr><td><code>attempts</code>, <code>path</code></td><td>형식 오류로 다시 요청한 횟수, 응답을 받은 방식 (native / parse / fenced)</td></tr>
+<tr><td><code>usage</code></td><td>실제 입력·출력 토큰</td></tr>
+</table></div>
+<details class="art"><summary><span class="f">시스템 프롬프트 앞부분</span><span class="d">역할 지시문. 뒤에 규칙 md가 그대로 붙음</span></summary><pre>You are the Test Writer of GenUT. You write GoogleTest (gtest) test cases in C++ for one function.
+
+How your output is used:
+- You write only the statements inside each test body. Code generates everything else: #include lines, stubs, and the wrapper `TEST(&lt;suite&gt;, &lt;case name&gt;) { ... }`.
+- Each case is built, run and judged on its own. A failing case is fixed or dropped without touching the others.
+
+1. Follow the rules (공통 규칙, 이 프로덕트 규칙) exactly. They take priority over these instructions.
+2. Use only names given by the analysis report, the shared helpers or the stub usage. Do not invent functions, types, macros or fields.
+3. Every case calls `rb_push` and checks the result with at least one meaningful assertion. No assertion may be always true.
+4. Cases are independent: no reliance on other cases, on execution order, or on state left behind.
+5. Do not write #include lines, test registration or a main function.
+6. When several cases need the same setup, put it in a helper (a complete function definition) and call it. Never redefine an existing helper.
+7. Never repeat or modify a case that is already passing.
+8. Name each case test_rb_push_&lt;situation&gt; and write purpose as one Korean sentence.</pre></details>
+<details class="art"><summary><span class="f">유저 프롬프트 끝부분</span><span class="d">분석 보고서 뒤의 Analyzer 의견 · 예시 · 할 일</span></summary><pre>## Analyzer 의견
+
+주의 사항:
+- rb_init으로 초기화한 rb와 실제 버퍼를 넘겨야 한다
+- rb_alloc_slot은 slot.c(rbslot 타깃)에 정의되어 있다
+추천 케이스:
+- test_rb_push_ok [normal] 빈 버퍼에 2바이트 쓰기 → RB_OK, rb_used 2
+- test_rb_push_full [boundary] 남은 공간보다 긴 데이터 → RB_ENOSPC
+- test_rb_push_null [null] rb 또는 data가 NULL → RB_EINVAL
+
+## 예시
+
+Example body for a different function, `int sum(const int *v, size_t n)`:
+
+```
+int v[] = {2, 3};
+EXPECT_EQ(sum(v, 2), 5);
+```
+
+## 할 일
+
+Write exactly one test case: the simplest normal-path call of `rb_push` that checks its return value or main effect. Do not test error paths yet.</pre></details>
+<details class="art"><summary><span class="f">응답 (파싱 결과)</span><span class="d">케이스 이름 · 목적 · 본문만 받음</span></summary><pre>{
+  "cases": [
+    {
+      "name": "test_rb_push_ok",
+      "purpose": "빈 버퍼에 2바이트를 쓰면 성공하고 사용량이 2가 된다",
+      "body": "struct rb rb;\nunsigned char buf[8];\nrb_init(&amp;rb, buf, sizeof(buf));\nEXPECT_EQ(rb_push(&amp;rb, \"ab\", 2), RB_OK);\nEXPECT_EQ(rb_used(&amp;rb), 2u);"
+    }
+  ],
+  "helpers": []
+}</pre></details>
+<p>코드가 이 본문으로 만든 테스트 파일입니다. include 블록, fixture, <code>TEST_F</code> 감싸기는 모두 코드가 만들고, C 소스라 include가 <code>extern "C"</code>로 감싸입니다.</p>
+<details class="art" open><summary><span class="f">candidates/r1/ring_buffer_rb_push_test.cc</span><span class="d">빌드 2에 들어간 파일</span></summary><pre>// GenUT가 생성한 테스트입니다: rb_push (ring_buffer.c). 직접 고치면 다음 생성 때 덮어씁니다.
+#include &lt;gtest/gtest.h&gt;
+
+extern "C" {
+#include "rb.h"
+#include &lt;stddef.h&gt;
+}
+
+class RingBufferRbPushTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+  }
+  void TearDown() override {
+  }
+};
+
+TEST_F(RingBufferRbPushTest, test_rb_push_ok) {
+  struct rb rb;
+  unsigned char buf[8];
+  rb_init(&amp;rb, buf, sizeof(buf));
+  EXPECT_EQ(rb_push(&amp;rb, "ab", 2), RB_OK);
+  EXPECT_EQ(rb_used(&amp;rb), 2u);
+}</pre></details>
+<details class="art"><summary><span class="f">candidates/r1/run-rb_push/result.json</span><span class="d">gtest JSON 결과 (케이스별 판정의 근거)</span></summary><pre>{
+  "tests": 1,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-22T15:42:51Z",
+  "time": "0s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RingBufferRbPushTest",
+      "tests": 1,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T15:42:51Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "test_rb_push_ok",
+          "file": "&lt;build-genut&gt;/genut-src/ring_buffer_rb_push_test.cc",
+          "line": 17,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T15:42:51Z",
+          "time": "0s",
+          "classname": "RingBufferRbPushTest"
+        }
+      ]
+    }
+  ]
+}</pre></details>
+</div>
+
+<div class="step" id="w5">
+<div class="head"><span class="num">⑤</span><b>확장</b><span class="who">Test Writer</span></div>
+<div class="line">[5/8] 확장     rb_push: 케이스 3개 생성</div>
+<p>Test Writer가 3개를 더 썼습니다. 둘에는 흔한 실수가 들어 있습니다: <b>기대값이 틀린 케이스</b>와 <b><code>rb_init</code>을 빠뜨린 케이스</b>.</p>
+<details class="art" open><summary><span class="f">candidates/r2/ring_buffer_rb_push_test.cc</span><span class="d">새 케이스 부분</span></summary><pre>TEST_F(RingBufferRbPushTest, test_rb_push_full) {
+  struct rb rb;
+  unsigned char buf[4];
+  rb_init(&amp;rb, buf, sizeof(buf));
+  EXPECT_EQ(rb_push(&amp;rb, "abcdef", 6), RB_OK);
+}
+
+TEST_F(RingBufferRbPushTest, test_rb_push_null) {
+  EXPECT_EQ(rb_push(NULL, "a", 1), RB_EINVAL);
+  struct rb rb;
+  unsigned char buf[4];
+  rb_init(&amp;rb, buf, sizeof(buf));
+  EXPECT_EQ(rb_push(&amp;rb, NULL, 1), RB_EINVAL);
+}
+
+TEST_F(RingBufferRbPushTest, test_rb_push_exact_fit) {
+  struct rb rb = {};
+  rb.buf = (unsigned char *)16;  /* rb_init을 빠뜨림 */
+  rb.cap = 4;
+  EXPECT_EQ(rb_push(&amp;rb, "abcd", 4), RB_OK);
+}</pre></details>
+<p>결과: <code>test_rb_push_null</code> 통과, <code>test_rb_push_full</code> 단정 실패, <code>test_rb_push_exact_fit</code> 세그폴트. 크래시가 나면 GenUT는 의심 케이스만 따로 다시 실행해(<b>격리</b>) gdb 백트레이스를 받습니다.</p>
+<details class="art"><summary><span class="f">candidates/r2/rb_push.run.log</span><span class="d">격리 재실행의 gdb 백트레이스 (발췌)</span></summary><pre>Thread 1 received signal SIGSEGV, Segmentation fault.
+0x00007ff8284b8c3a in ucrtbase!memmove () from C:/Windows/System32/ucrtbase.dll
+#0  0x00007ff8284b8c3a in ucrtbase!memmove () from C:/Windows/System32/ucrtbase.dll
+#1  0x00007ff77fc535de in rb_push (rb=0x5ff7f0, data=0x7ff77fc65185 &lt;testing::kMaxStackTraceDepth+333&gt;, len=4) at ~/work/sample/src/ring_buffer.c:39
+#2  0x00007ff77fc5233e in RingBufferRbPushTest_test_rb_push_exact_fit_Test::TestBody (this=0x7bef00) at &lt;build-genut&gt;/genut-src/ring_buffer_rb_push_t…</pre></details>
+<p>이 로그에서 만든 <b>크래시 브리프</b>입니다. Fixer는 원시 로그 대신 이것을 받습니다.</p>
+<details class="art" open><summary><span class="f">crash/r2-rb_push.md</span><span class="d">크래시 브리프</span></summary><pre>## 크래시 브리프
+분류: segv
+위치: ~/work/sample/src/ring_buffer.c:39   &lt;- 책임 프레임
+호출 체인 (대상/테스트 프레임만):
+  RingBufferRbPushTest_test_rb_push_exact_fit_Test::TestBody  (&lt;build-genut&gt;/genut-src/ring_buffer_rb_push_test.cc:44)
+  -&gt; rb_push  (~/work/sample/src/ring_buffer.c:39)
+용의 케이스: test_rb_push_exact_fit
+가설: 잘못된 메모리 접근. NULL이나 초기화되지 않은 포인터를 넘겼을 가능성이 크다.</pre></details>
+</div>
+
+<div class="step" id="w6">
+<div class="head"><span class="num">⑥</span><b>수정</b><span class="who">코드(분류·전략) + Fixer</span></div>
+<div class="line">[6/8] 수정     round 1: fix_case(test_rb_push_full) → 재검증 · fix_case(test_rb_push_exact_fit) → 재검증</div>
+<div class="io">
+<div><b>입력</b>실패한 케이스, 분류·요약·상세, 허용 전략, 통과 케이스 이름(손대지 말 것), 과거 수정 사례·지식 노트</div>
+<div><b>하는 일</b>전략 하나를 고르고 그 케이스 본문 전체를 다시 씀. 코드가 적용·검사</div>
+<div><b>산출물</b><code>fixes/r1-*.md</code>, <code>prompts/04~05-fixer-*.md</code>, <code>candidates/r3/</code></div>
+</div>
+<details class="art" open><summary><span class="f">prompts/04-fixer-test_rb_push_full.md</span><span class="d">Fixer가 받은 실패 정보 (유저 프롬프트 일부)</span></summary><pre>## 실패한 케이스
+
+// test_rb_push_full: 용량 4에 6바이트를 쓰면 거부된다
+struct rb rb;
+unsigned char buf[4];
+rb_init(&amp;rb, buf, sizeof(buf));
+EXPECT_EQ(rb_push(&amp;rb, "abcdef", 6), RB_OK);
+
+## 실패 정보
+
+분류: assertion_failed (단계: run)
+요약: &lt;build-genut&gt;/genut-src/ring_buffer_rb_push_test.cc:29: Failure
+실패 메시지에 나온 값: -28, 0
+상세:
+&lt;build-genut&gt;/genut-src/ring_buffer_rb_push_test.cc:29: Failure
+Expected equality of these values:
+  rb_push(&amp;rb, "abcdef", 6)
+    Which is: -28
+  RB_OK
+    Which is: 0
+
+## 할 일
+
+Handle the failing case `test_rb_push_full`.
+Failure category: assertion_failed
+Hint: 단정이 실패했습니다. 소스의 반환 지점·조건과 대조해 기대값이 틀렸는지 소스가 틀렸는지 판단하세요. 기대값을 실제값으로 그냥 바꾸면 거부됩니다.
+Allowed strategies (prefer the first): fix_case, add_stub, drop_case, narrow_scope, give_up</pre></details>
+<p>수정 기록입니다. 기대값을 직전 실제값(-28 = <code>RB_ENOSPC</code>)으로 바꿨지만, Fixer가 소스의 반환 지점(<code>:34</code>)을 근거로 댔으므로 "실제값 베끼기" 검사를 통과합니다. 근거가 없었다면 소스 버그 의심으로 분류됩니다.</p>
+<details class="art" open><summary><span class="f">fixes/r1-test_rb_push_full.md</span><span class="d">분류 · 전략 · 이유 · 근거 · 전/후</span></summary><pre># test_rb_push_full
+
+- 분류: assertion_failed
+- 권장 전략: fix_case (허용: fix_case, add_stub, drop_case, narrow_scope, give_up)
+- Fixer 선택: fix_case → 적용: fix_case
+- 이유: 용량보다 긴 데이터는 34행에서 RB_ENOSPC를 돌려준다. 기대값이 틀렸다
+- 근거: :34 return RB_ENOSPC (조건 :32 rb_free_space(rb) &lt; len)
+
+## 실패 정보
+
+```
+분류: assertion_failed (단계: run)
+요약: &lt;build-genut&gt;/genut-src/ring_buffer_rb_push_test.cc:29: Failure
+실패 메시지에 나온 값: -28, 0
+```
+
+## 전
+
+```
+struct rb rb;
+unsigned char buf[4];
+rb_init(&amp;rb, buf, sizeof(buf));
+EXPECT_EQ(rb_push(&amp;rb, "abcdef", 6), RB_OK);
+```
+
+## 후
+
+```
+struct rb rb;
+unsigned char buf[4];
+rb_init(&amp;rb, buf, sizeof(buf));
+EXPECT_EQ(rb_push(&amp;rb, "abcdef", 6), RB_ENOSPC);
+EXPECT_EQ(rb_used(&amp;rb), 0u);
+```</pre></details>
+<div class="callout ok"><p>두 케이스를 고친 뒤 재검증(빌드 4, <code>candidates/r3/</code>)에서 4개 모두 통과했습니다. 이미 통과한 <code>test_rb_push_ok</code>, <code>test_rb_push_null</code>은 글자 하나 바뀌지 않았습니다.</p></div>
+</div>
+
+<div class="step" id="w7">
+<div class="head"><span class="num">⑦</span><b>커버리지</b><span class="who">코드(gcov·도달 조건) + Test Writer</span></div>
+<div class="line">[7/8] 커버리지   rb_push: 라인 92% (12/13) · 미커버 :38
+[7/8] 커버리지   rb_push: 케이스 1개 생성
+[7/8] 커버리지   rb_push: 라인 100% (13/13)</div>
+<p>통과 케이스만 다시 실행해(빌드 없음) gcov로 재니 <code>:38 return RB_ENOMEM;</code>이 남았습니다. Test Writer는 그 줄에 닿는 <b>도달 조건</b>을 함께 받습니다.</p>
+<details class="art" open><summary><span class="f">prompts/06-test_writer-coverage.md</span><span class="d">미커버 줄과 도달 조건</span></summary><pre>## 미커버 줄과 도달 조건
+
+미커버 :38  `return RB_ENOMEM;`
+  조건 (slot == NULL) 참 (:37) → RB_ENOMEM 반환
+  관련: slot ← rb_alloc_slot()의 반환값, linkable</pre></details>
+<details class="art"><summary><span class="f">같은 프롬프트의 할 일</span><span class="d">이미 있는 케이스 이름은 다시 쓰지 않게 함</span></summary><pre>## 할 일
+
+Write new test cases that execute the lines listed under "미커버 줄과 도달 조건". For each item, code gives the condition and the related parameters, calls and stub return values; choose concrete inputs that make the condition true or false as stated. Every case must still check the result with a meaningful assertion; a case that only runs lines is rejected. Do not repeat existing cases.
+Existing case names (do not reuse): test_rb_push_ok, test_rb_push_full, test_rb_push_null, test_rb_push_exact_fit</pre></details>
+<p>받은 케이스 <code>test_rb_push_nomem</code>(남은 공간은 있지만 꼬리가 버퍼 끝이라 슬롯을 못 받는 상황)으로 100%가 되었습니다. 이어서 ⑧ 리뷰에서 Reviewer 지적은 0건이었습니다.</p>
+</div>
+
+<div class="step" id="w9">
+<div class="head"><span class="num">✓</span><b>최종 확인 · 설치 · 리포트</b><span class="who">코드</span></div>
+<div class="line">[확인] rb_push: complete · 최종 확인 ok → ~/work/sample/tests/generated/ring_buffer_rb_push_test.cc</div>
+<p>통과 케이스 5개만 담은 파일로 다시 빌드·실행해 확인한 뒤 프로덕트 트리에 설치합니다.</p>
+<details class="art" open><summary><span class="f">~/work/sample/tests/generated/ring_buffer_rb_push_test.cc</span><span class="d">설치된 최종 테스트 파일</span></summary><pre>// GenUT가 생성한 테스트입니다: rb_push (ring_buffer.c). 직접 고치면 다음 생성 때 덮어씁니다.
+#include &lt;gtest/gtest.h&gt;
+
+extern "C" {
+#include "rb.h"
+#include &lt;stddef.h&gt;
+}
+
+class RingBufferRbPushTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+  }
+  void TearDown() override {
+  }
+};
+
+TEST_F(RingBufferRbPushTest, test_rb_push_ok) {
+  struct rb rb;
+  unsigned char buf[8];
+  rb_init(&amp;rb, buf, sizeof(buf));
+  EXPECT_EQ(rb_push(&amp;rb, "ab", 2), RB_OK);
+  EXPECT_EQ(rb_used(&amp;rb), 2u);
+}
+
+TEST_F(RingBufferRbPushTest, test_rb_push_full) {
+  struct rb rb;
+  unsigned char buf[4];
+  rb_init(&amp;rb, buf, sizeof(buf));
+  EXPECT_EQ(rb_push(&amp;rb, "abcdef", 6), RB_ENOSPC);
+  EXPECT_EQ(rb_used(&amp;rb), 0u);
+}
+
+TEST_F(RingBufferRbPushTest, test_rb_push_null) {
+  EXPECT_EQ(rb_push(NULL, "a", 1), RB_EINVAL);
+  struct rb rb;
+  unsigned char buf[4];
+  rb_init(&amp;rb, buf, sizeof(buf));
+  EXPECT_EQ(rb_push(&amp;rb, NULL, 1), RB_EINVAL);
+}
+
+TEST_F(RingBufferRbPushTest, test_rb_push_exact_fit) {
+  struct rb rb;
+  unsigned char buf[4];
+  rb_init(&amp;rb, buf, sizeof(buf));
+  EXPECT_EQ(rb_push(&amp;rb, "abcd", 4), RB_OK);
+  EXPECT_EQ(rb_used(&amp;rb), 4u);
+}
+
+TEST_F(RingBufferRbPushTest, test_rb_push_nomem) {
+  struct rb rb;
+  unsigned char buf[8];
+  rb_init(&amp;rb, buf, sizeof(buf));
+  rb.head = 4;  /* 남은 공간은 4지만 */
+  rb.tail = 8;  /* 꼬리가 끝이라 슬롯을 못 받는다 */
+  EXPECT_EQ(rb_push(&amp;rb, "ab", 2), RB_ENOMEM);
+  EXPECT_EQ(rb.tail, 8u);
+}</pre></details>
+<details class="art"><summary><span class="f">~/work/sample/tests/generated/CMakeLists.txt</span><span class="d">GenUT가 관리하는 CMakeLists</span></summary><pre># GenUT가 관리하는 파일입니다 (설계 7.5). 직접 고치면 다음 설치 때 덮어씁니다.
+# 루트 CMakeLists.txt에 add_subdirectory(&lt;이 디렉터리&gt;)를 한 줄 넣으면 사용자 빌드에서도 테스트를 빌드합니다.
+cmake_minimum_required(VERSION 3.19)
+if(DEFINED GENUT_WORK_DIR)
+  file(REAL_PATH "${GENUT_WORK_DIR}" _genut_work)
+  file(REAL_PATH "${CMAKE_CURRENT_LIST_DIR}" _genut_here)
+  if(NOT _genut_here STREQUAL _genut_work)
+    return()  # GenUT 전용 빌드에서는 작업 중 파일만 빌드한다
+  endif()
+endif()
+if(NOT CMAKE_CXX_COMPILER_LOADED)
+  enable_language(CXX)
+endif()
+find_package(GTest REQUIRED)
+# 테스트 파일별 링크 타깃: set(GENUT_LINKS_&lt;이름&gt; ...). 없으면 아래 기본값
+include("${CMAKE_CURRENT_LIST_DIR}/genut_links.cmake" OPTIONAL)
+file(GLOB _genut_tests CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/*_*_test.cc")
+foreach(_genut_src IN LISTS _genut_tests)
+  get_filename_component(_genut_stem "${_genut_src}" NAME_WE)
+  string(REGEX REPLACE "_test$" "" _genut_name "${_genut_stem}")
+  if(DEFINED GENUT_LINKS_${_genut_name})
+    set(_genut_links ${GENUT_LINKS_${_genut_name}})
+  else()
+    set(_genut_links rb rbslot)
+  endif()
+  add_executable(genut_${_genut_name} "${_genut_src}")
+  target_link_libraries(genut_${_genut_name} PRIVATE ${_genut_links} GTest::gtest_main)
+endforeach()</pre></details>
+<details class="art" open><summary><span class="f">final/report.md</span><span class="d">리포트</span></summary><pre># GenUT 리포트: ~/work/sample/src/ring_buffer.c
+
+- 실행: 20261022-154248-ring_buffer-rb_push
+- 백엔드: gtest
+- 빌드 6/30 · 소요 9.7s · 토큰 17614
+
+## rb_push
+
+- 결과: **complete** — rb_push: complete · 통과 5 · 커버리지 100% (13/13) · 최종 확인 OK
+- 테스트 파일: `~/work/sample/tests/generated/ring_buffer_rb_push_test.cc`
+- 통과 케이스: `test_rb_push_ok`, `test_rb_push_full`, `test_rb_push_null`, `test_rb_push_exact_fit`, `test_rb_push_nomem`
+
+## 지식 노트
+
+- [프로덕트] rb_push 테스트는 rb_init으로 초기화한 실제 버퍼를 써야 하며, 필드를 직접 채우면 memcpy에서 크래시가 난다 (id 1ede5bad) — 프로덕트 고유 정보 때문에 프로덕트로: rb_push
+- [공통 후보] 단정 실패를 고칠 때는 분석 보고서의 반환 지점과 조건 줄을 근거로 기대값을 정하면 한 번에 고쳐진다 (id 5df61f95)</pre></details>
+</div>
+
+<div class="step" id="w10">
+<div class="head"><span class="num">✎</span><b>지식 노트와 결과 보기</b><span class="who">Note Keeper + 코드</span></div>
+<div class="line">[노트] 2개 저장 (프로덕트 1 · 공통 후보 1 · 공통 0)</div>
+<p>첫 노트는 LLM이 global로 제안했지만 분석에서 나온 프로덕트 심볼 <code>rb_push</code>가 들어 있어 <b>프로덕트로 강등</b>되었습니다. 둘째는 프로덕트 정보가 없어 <b>공통 후보</b>가 되었습니다.</p>
+<details class="art" open><summary><span class="f">~/.genut/products/sample/knowledge/product.md</span><span class="d">사람이 고쳐도 되는 노트 파일</span></summary><pre># 프로덕트 지식: sample
+
+GenUT가 쌓는 지식 노트입니다. 한 줄에 하나씩. 사람이 고쳐도 됩니다.
+
+- rb_push 테스트는 rb_init으로 초기화한 실제 버퍼를 써야 하며, 필드를 직접 채우면 memcpy에서 크래시가 난다 &lt;!-- genut id=1ede5bad key=090bc7b1c29f cat=crash strategy=fix_case runs=20261022-154248-ring_buffer-rb_push products=sample --&gt;
+
+## 공통 후보
+
+- 단정 실패를 고칠 때는 분석 보고서의 반환 지점과 조건 줄을 근거로 기대값을 정하면 한 번에 고쳐진다 &lt;!-- genut id=5df61f95 key=27ebbc16a289 cat=assertion_failed strategy=fix_case runs=20261022-154248-ring_buffer-rb_push products=sample --&gt;</pre></details>
+<details class="art"><summary><span class="f">knowledge/fix_patterns.yaml</span><span class="d">성공한 수정 사례 (다음 Fixer 프롬프트의 예시)</span></summary><pre>- key: 53b21c3430ad
+  category: assertion_failed
+  pattern: 'c:&lt;path&gt;:&lt;n&gt;: failure'
+  message: '&lt;build-genut&gt;/genut-src/ring_buffer_rb_push_test.cc:29:
+    Failure'
+  before: 'struct rb rb;
+
+    unsigned char buf[4];
+
+    rb_init(&amp;rb, buf, sizeof(buf));
+
+    EXPECT_EQ(rb_push(&amp;rb, "abcdef", 6), RB_OK);'
+  after: 'struct rb rb;
+
+    unsigned char buf[4];
+
+    rb_init(&amp;rb, buf, sizeof(buf));
+
+    EXPECT_EQ(rb_push(&amp;rb, "abcdef", 6), RB_ENOSPC);
+
+    EXPECT_EQ(rb_used(&amp;rb), 0u);'
+  runs:
+  - 20261022-154248-ring_buffer-rb_push</pre></details>
+<pre class="term">$ genut knowledge list --home ~/.genut
+공통 지식 (0)
+프로덕트 지식: sample (1)
+  1ede5bad  rb_push 테스트는 rb_init으로 초기화한 실제 버퍼를 써야 하며, 필드를 직접 채우면 memcpy에서 크래시가 난다  [crash] 전략 fix_case (실행 1회)
+공통 후보 (1)
+  5df61f95  단정 실패를 고칠 때는 분석 보고서의 반환 지점과 조건 줄을 근거로 기대값을 정하면 한 번에 고쳐진다  [assertion_failed] 전략 fix_case (실행 1회)</pre>
+<pre class="term">$ genut show latest --home ~/.genut
+20261022-154248-ring_buffer-rb_push · ~/work/sample/src/ring_buffer.c · gtest · 단계 final
+빌드 6/30 · 소요 9.7s · 토큰 17614
+  rb_push: complete · 통과 5 · 커버리지 100% (13/13) · 최종 확인 OK
+
+$ genut view latest --no-open --home ~/.genut
+뷰어: ~/.genut/products/sample/runs/20261022-154248-ring_buffer-rb_push/view.html</pre>
+<p><code>view.html</code>은 의존성 없는 단일 HTML입니다. 위에서부터 요약(함수별 결과·예산), <b>타임라인</b>(단계·메시지·LLM 호출·수정·격리), <b>케이스 보드</b>(케이스별 상태 변화와 본문·마지막 실패), 프롬프트 원문, 수정 기록, 크래시 브리프, 리포트가 접힌 상태로 들어 있습니다.</p>
+</div>
+
+<h3 id="w11">6.4 실행 기록 디렉터리 전체</h3>
+<pre class="tree">~/.genut/products/sample/runs/20261022-154248-ring_buffer-rb_push/
+├── run.json                 설정 스냅샷, provider/모델, 규칙·프롬프트 해시, 결과, 예산 사용량
+├── trace.jsonl              시간순 이벤트 (단계, 메시지, LLM 호출, 수정, 격리, 커버리지, 노트)
+├── state.json               함수·케이스 상태 (빌드마다 갱신. 중단돼도 통과 케이스가 남음)
+├── .seq                     같은 초에 만든 실행끼리의 순번 (latest~N 정렬)
+├── analysis/rb_push.md|json 분석 보고서 / 전체 분석 데이터
+├── linkscope.json           호출 심볼별 링크 범위와 근거
+├── preflight/preflight.log  사전검증 빌드 로그
+├── prompts/01-analyzer.md … 08-note_keeper.md   호출마다 시스템·유저 프롬프트, 응답 원문, 파싱 결과
+├── candidates/r1 … r4/      검증 라운드마다 테스트 파일, build.log, &lt;함수&gt;.run.log, run-&lt;함수&gt;/result.json
+├── crash/r2-rb_push.md      크래시 브리프 + 원시 로그 발췌
+├── fixes/r1-&lt;케이스&gt;.md      분류, 권장·선택 전략, 이유, 근거, 실패 정보, 고치기 전/후
+├── coverage/m0, m1/         커버리지 측정마다 lcov 파일
+├── snapshots/bN-*.cc        녹색 스냅샷 (b2, b4, b5)
+├── final/                   최종 테스트 파일, check1/(최종 확인 로그), coverage/, report.md
+└── view.html                genut view 결과</pre>
+<details class="art"><summary><span class="f">run.json</span><span class="d">설정 부분은 생략</span></summary><pre>{
+  "run_id": "20261022-154248-ring_buffer-rb_push",
+  "source_file": "~/work/sample/src/ring_buffer.c",
+  "backend": "gtest",
+  "product": "sample",
+  "functions": [
+    "rb_push"
+  ],
+  "provider": "fake",
+  "model": "fake-model",
+  "dry_run": false,
+  "stop_after": "",
+  "rules_hash": "315bbe884808e8f0",
+  "prompts": {
+    "analyzer": "d75f17cd236594b5",
+    "test_writer": "2c54c8acef435712",
+    "fixer": "12a21bd78c990af1",
+    "unreachable": "33c0af06f82cc6f4",
+    "reviewer": "251f575b3920b6ab",
+    "note_keeper": "96f6977bfa12b89c"
+  },
+  "started": "2026-10-22T15:42:48",
+  "finished": "2026-10-22T15:42:57",
+  "stage": "final",
+  "error": "",
+  "interrupted": false,
+  "result": {
+    "rb_push": "complete"
+  },
+  "budget": {
+    "builds_used": 6,
+    "builds_max": 30,
+    "elapsed_sec": 9.7,
+    "tokens": {
+      "rb_push": 16359,
+      "(notes)": 1255
+    },
+    "iterations": 1
+  },
+  "config": "{ ... 이 실행에 쓴 전체 설정 (--set 포함) ... }"
+}</pre></details>
+<details class="art"><summary><span class="f">trace.jsonl</span><span class="d">앞부분</span></summary><pre>{"ts": 1792651368.063, "type": "stage_start", "stage": "analyze"}
+{"ts": 1792651368.51, "type": "message", "text": "[1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개"}
+{"ts": 1792651368.513, "type": "llm_call", "role": "analyzer", "prompt_file": "prompts/01-analyzer.md", "agent": "analyzer", "stage": "analyze", "function": "rb_push", "…
+{"ts": 1792651368.513, "type": "testability", "agent": "analyzer", "function": "rb_push", "testable": true, "reason": "", "warning": ""}
+{"ts": 1792651368.514, "type": "stage_end", "stage": "analyze", "seconds": 0.451}
+{"ts": 1792651368.514, "type": "stage_start", "stage": "stub"}
+{"ts": 1792651368.514, "type": "message", "text": "[2/8] 스텁     rb_push: 스텁 0개"}
+{"ts": 1792651368.514, "type": "stage_end", "stage": "stub", "seconds": 0.0}
+{"ts": 1792651368.515, "type": "stage_start", "stage": "preflight"}</pre></details>
+</details>
+
+<!-- ============================================================ 7 -->
+<details class="sec" id="s7" open>
+<summary><span class="n">7</span>따라 하기: KUnit 백엔드</summary>
+<div class="callout warn"><p>KUnit 예시는 저장소의 가짜 커널 트리(<code>tests/fixtures/kernel_tree</code>)와, 계약대로 불리지만 실제 커널 대신 케이스 본문의 표지(<code>// COVERS=...</code>, <code>// FAIL ACTUAL=...</code>)로 결과를 내는 <b>가짜 실행 스크립트</b>(<code>tests/fixtures/kunit/fake_kunit.py</code>)로 만들었습니다. 실제 환경에서는 커널 빌드와 QEMU가 이 자리에 들어가고 본문에 표지 주석은 없습니다.</p></div>
+<details class="art"><summary><span class="f">~/.genut/products/foo-driver/product.toml</span><span class="d">이 예시의 KUnit 설정</span></summary><pre>[product]
+name = "foo-driver"
+root = "~/work/linux"
+backend = "kunit"
+
+[kunit]
+compile_commands = "compile_commands.json"
+test_file = "drivers/foo/foo_kunit.c"
+test_dir = "drivers/foo/tests"
+run_script = "&lt;GenUT 저장소&gt;/tests/fixtures/kunit/fake_kunit.py"
+script_supports_filter = false</pre></details>
+<pre class="term">$ genut gen --file ~/work/linux/drivers/foo/foo.c --func foo_clamp --product foo-driver --set llm.fake.script=~/demo/kunit_script.json --home ~/.genut
+[1/8] 분석     int foo_clamp(int v, int lo, int hi) · 호출 0개 · 스텁 필요 0개
+[2/8] 스텁     foo_clamp: 스텁 0개
+[3/8] 사전검증   뼈대 빌드 OK (0.1s)
+[4/8] 스모크    foo_clamp: 케이스 1개 생성
+[4/8] 스모크    foo_clamp: 통과 1 · 실패 0 · 제거 0
+[5/8] 확장     foo_clamp: 케이스 2개 생성
+[6/8] 수정     round 1: fix_case(test_foo_clamp_low) → 재검증
+[5/8] 확장     foo_clamp: 통과 3 · 실패 0 · 제거 0
+[6/8] 수정     foo_clamp: 통과 3 · 실패 0 · 제거 0
+[7/8] 커버리지   foo_clamp: 라인 88% (7/8) · 미커버 :7
+[7/8] 커버리지   foo_clamp: 케이스 1개 생성
+[7/8] 커버리지   foo_clamp: 라인 100% (8/8)
+[8/8] 리뷰     foo_clamp: 지적 0건
+[노트] 0개 저장 (프로덕트 0 · 공통 후보 0 · 공통 0)
+[확인] foo_clamp: complete · 최종 확인 ok → ~/work/linux/drivers/foo/tests/foo_foo_clamp_test.c
+완료 · 빌드 6 · 토큰 10891 · 1s → ~/.genut/products/foo-driver/runs/20261022-154314-foo-foo_clamp</pre>
+<p>확장 라운드의 실행 로그(KTAP)입니다. GenUT는 우리 스위트 블록과 <code>EXPECTATION FAILED</code> 줄만 골라 Fixer에 줍니다.</p>
+<details class="art" open><summary><span class="f">candidates/r2/kunit.log</span><span class="d">KTAP</span></summary><pre>[    1.000000] KTAP version 1
+[    1.000000] 1..1
+[    1.000000]     KTAP version 1
+[    1.000000]     # Subtest: foo_foo_clamp_test
+[    1.000000]     1..3
+[    1.010000]     ok 1 test_foo_clamp_inside
+[    1.020000]     # test_foo_clamp_low: EXPECTATION FAILED at drivers/foo/tests/foo_foo_clamp_test.c:12
+[    1.020000]     Expected foo_clamp(...) == 0, but
+[    1.020000]         foo_clamp(...) == 0 (0x0)
+[    1.020000]     not ok 2 test_foo_clamp_low
+[    1.030000]     ok 3 test_foo_clamp_high
+[    1.030000] not ok 1 foo_foo_clamp_test</pre></details>
+<div class="grid2">
+<details class="art" open><summary><span class="f">drivers/foo/tests/foo_foo_clamp_test.c</span><span class="d">함수별 테스트 파일</span></summary><pre>/* GenUT가 생성한 KUnit 테스트입니다: foo_clamp (foo.c). 집합 파일이 #include 합니다. 직접 고치면 다음 생성 때 덮어씁니다. */
+#include "../foo.h"
+#include &lt;linux/errno.h&gt;
+
+static void test_foo_clamp_inside(struct kunit *test)
+{
+	KUNIT_EXPECT_EQ(test, foo_clamp(5, 0, 10), 5); // COVERS=4,6,8,10,12
+}
+
+static void test_foo_clamp_low(struct kunit *test)
+{
+	KUNIT_EXPECT_EQ(test, foo_clamp(-1, 0, 10), 0); // COVERS=4,6,8,9
+}
+
+static void test_foo_clamp_high(struct kunit *test)
+{
+	KUNIT_EXPECT_EQ(test, foo_clamp(11, 0, 10), 10); // COVERS=4,6,8,10,11
+}
+
+static void test_foo_clamp_range(struct kunit *test)
+{
+	KUNIT_EXPECT_EQ(test, foo_clamp(1, 5, 0), -EINVAL); // COVERS=4,6,7
+}
+
+static int foo_foo_clamp_test_init(struct kunit *test)
+{
+	return 0;
+}
+
+static void foo_foo_clamp_test_exit(struct kunit *test)
+{
+}
+
+static struct kunit_case foo_foo_clamp_test_cases[] = {
+	KUNIT_CASE(test_foo_clamp_inside),
+	KUNIT_CASE(test_foo_clamp_low),
+	KUNIT_CASE(test_foo_clamp_high),
+	KUNIT_CASE(test_foo_clamp_range),
+	{}
+};
+
+static struct kunit_suite foo_foo_clamp_test = {
+	.name = "foo_foo_clamp_test",
+	.init = foo_foo_clamp_test_init,
+	.exit = foo_foo_clamp_test_exit,
+	.test_cases = foo_foo_clamp_test_cases,
+};</pre></details>
+<details class="art" open><summary><span class="f">drivers/foo/foo_kunit.c</span><span class="d">GenUT가 관리하는 집합 파일</span></summary><pre>/* GenUT가 관리하는 KUnit 집합 파일입니다 (설계 7.8). Makefile/Kconfig 등록은 사용자가 한 번 합니다. 직접 고치면 다음 생성 때 덮어씁니다. */
+#include &lt;kunit/test.h&gt;
+#include &lt;linux/string.h&gt;
+
+#include "tests/foo_foo_clamp_test.c"
+
+kunit_test_suites(&amp;foo_foo_clamp_test);</pre></details>
+</div>
+<div class="tbl"><table>
+<tr><th>단계</th><th>스크립트 호출</th></tr>
+<tr><td>사전검증</td><td><code>--mode build</code> (뼈대만. 이전 성공과 같으면 캐시)</td></tr>
+<tr><td>검증 라운드</td><td><code>--mode all</code> 한 번 (빌드 + 실행, 커버리지면 <code>--coverage-out</code>)</td></tr>
+<tr><td>크래시 격리</td><td>필터 지원 시 <code>--mode run --filter suite.case</code>, 아니면 의심 케이스만 담은 파일로 <code>--mode all</code></td></tr>
+<tr><td>최종 확인</td><td><code>--mode all</code> (통과 케이스만)</td></tr>
+</table></div>
+<p>실행이 끝나면 설치하지 않은 작업 파일은 원래대로 되돌리고, 집합 파일은 <code>test_dir</code>에 남은 모든 함수별 파일로 다시 씁니다.</p>
+</details>
+
+<!-- ============================================================ 8 -->
+<details class="sec" id="s8" open>
+<summary><span class="n">8</span>디버깅: 문제가 생겼을 때 어디를 보나</summary>
+
+<figure class="fig"><div class="scroll"><svg viewBox="0 0 920 380" role="img" aria-label="디버깅 지도. 가운데 실행 기록 디렉터리가 있고, 질문마다 볼 파일로 이어진다. 왜 멈췄나는 터미널의 참고 줄과 trace의 stop 이벤트, LLM이 무엇을 봤나는 prompts, 왜 고쳐지거나 제거됐나는 fixes, 왜 죽었나는 crash, 원본 로그는 candidates, 커버리지는 report와 coverage, 케이스 흐름은 view.html의 케이스 보드">
+<defs><marker id="f9a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="hi" x="330" y="150" width="260" height="80" rx="10"/><text class="t" x="460" y="178" text-anchor="middle">실행 기록</text><text class="s" x="460" y="198" text-anchor="middle">~/.genut/products/&lt;이름&gt;/</text><text class="s" x="460" y="214" text-anchor="middle">runs/&lt;실행 ID&gt;/</text>
+<g>
+<rect class="bx" x="10" y="14" width="270" height="56" rx="8"/><text class="t" x="22" y="36">왜 멈췄나?</text><text class="s" x="22" y="56">터미널 [참고] 줄 · trace.jsonl의 stop</text>
+<rect class="bx" x="10" y="94" width="270" height="56" rx="8"/><text class="t" x="22" y="116">LLM이 무엇을 보고 답했나?</text><text class="s" x="22" y="136">prompts/NN-역할-단계.md</text>
+<rect class="bx" x="10" y="174" width="270" height="56" rx="8"/><text class="t" x="22" y="196">왜 고쳐졌나 / 제거됐나?</text><text class="s" x="22" y="216">fixes/rN-케이스.md</text>
+<rect class="bx" x="10" y="254" width="270" height="56" rx="8"/><text class="t" x="22" y="276">왜 죽었나?</text><text class="s" x="22" y="296">crash/*.md (책임 프레임·가설)</text>
+<rect class="bx" x="640" y="14" width="270" height="56" rx="8"/><text class="t" x="652" y="36">원본 빌드·실행 로그는?</text><text class="ms" x="652" y="56">candidates/rN/build.log, *.run.log</text>
+<rect class="bx" x="640" y="94" width="270" height="56" rx="8"/><text class="t" x="652" y="116">커버리지가 왜 모자라나?</text><text class="s" x="652" y="136">final/report.md의 미커버 줄·분류</text>
+<rect class="bx" x="640" y="174" width="270" height="56" rx="8"/><text class="t" x="652" y="196">케이스 흐름을 한눈에</text><text class="s" x="652" y="216">genut view → 케이스 보드</text>
+<rect class="bx" x="640" y="254" width="270" height="56" rx="8"/><text class="t" x="652" y="276">이전 실행과 무엇이 다른가?</text><text class="ms" x="652" y="296">genut diff A B</text>
+<rect class="warn" x="300" y="300" width="320" height="64" rx="8"/><text class="t" x="460" y="322" text-anchor="middle">환경 문제는 실행 전에</text><text class="ms" x="460" y="342" text-anchor="middle">genut doctor · preflight/preflight.log</text><text class="s" x="460" y="357" text-anchor="middle">사전검증 실패는 LLM 비용 없이 멈춤</text>
+</g>
+<path class="ln" d="M280,42 L310,42 L340,150" marker-end="url(#f9a)"/><path class="ln" d="M280,122 L320,160" marker-end="url(#f9a)"/>
+<line class="ln" x1="280" y1="202" x2="328" y2="196" marker-end="url(#f9a)"/><path class="ln" d="M280,282 L320,222" marker-end="url(#f9a)"/>
+<path class="ln" d="M640,42 L610,42 L580,150" marker-end="url(#f9a)"/><path class="ln" d="M640,122 L600,160" marker-end="url(#f9a)"/>
+<line class="ln" x1="640" y1="202" x2="592" y2="196" marker-end="url(#f9a)"/><path class="ln" d="M640,282 L600,222" marker-end="url(#f9a)"/>
+</svg></div><figcaption>그림 9. 질문별로 볼 곳. 모든 것은 실행 기록 디렉터리 하나에 있습니다.</figcaption></figure>
+
+<h3>8.1 증상별 대처</h3>
+<div class="tbl"><table>
+<tr><th>증상 (터미널·리포트)</th><th>볼 곳</th><th>원인과 대처</th></tr>
+<tr><td><code>[참고] infra_error: 사전검증: 뼈대 빌드 실패</code></td><td><code>preflight/preflight.log</code></td><td>include 경로·링크 타깃·CMake 설정 문제. <code>genut doctor</code>, <code>link_targets</code> 확인. LLM은 부르지 않았으므로 비용 없음</td></tr>
+<tr><td><code>cmake</code>·<code>GTest</code>를 못 찾음</td><td><code>genut doctor</code></td><td>PATH에 툴체인 추가 (Windows MSYS2: <code>C:\msys64\ucrt64\bin</code>), gtest 설치 또는 <code>[gtest] gtest_root</code></td></tr>
+<tr><td>케이스가 <code>undefined_reference</code>로 실패</td><td><code>fixes/*.md</code>, <code>candidates/rN/build.log</code></td><td>대상 함수가 부르는 함수의 타깃이 <code>link_targets</code>에 없음 → 추가. 정말 정의가 없으면 스텁 도구가 필요 (현재는 그 경로를 피함)</td></tr>
+<tr><td><code>[참고] ... 기록된 응답이 더 없습니다</code></td><td>—</td><td>replay에서 설정을 바꿔 기록보다 많은 LLM 호출이 필요해짐. <code>--from &lt;단계&gt;</code>로 그 단계부터 실제 LLM (9.3 예시)</td></tr>
+<tr><td><code>context_overflow — 규칙 md 길이를 줄이세요</code></td><td><code>prompts/*.md</code>의 <code>tokens</code>/<code>limit</code>/<code>trims</code></td><td>필수 조각만으로 한도 초과. 규칙 md를 줄이거나 <code>output_reserve_tokens</code>, <code>max_context</code> 확인</td></tr>
+<tr><td>같은 케이스가 수정 한도로 계속 제거</td><td><code>fixes/*.md</code>의 이유·근거, Fixer 프롬프트의 실패 정보</td><td>분석 보고서에 필요한 정보(필드, 상수)가 빠졌는지 확인. 규칙 md에 반복되는 실수를 금지 문장으로 추가. <code>max_case_fixes</code> 조정</td></tr>
+<tr><td>크래시 반복</td><td><code>crash/*.md</code>의 책임 프레임·가설</td><td>초기화 함수를 안 부르는 실수가 흔함 → 규칙 md에 "반드시 <code>rb_init</code>으로 초기화" 같은 문장</td></tr>
+<tr><td><code>소스 버그 의심</code></td><td><code>report.md</code>, <code>knowledge/suspected_bugs.md</code></td><td>사람이 소스를 확인할 가치가 있음. 함수 본문이 바뀌지 않으면 다음 생성에서도 같은 시도를 피함</td></tr>
+<tr><td>응답 형식 오류 (재시도가 많음)</td><td><code>prompts/*.md</code>의 <code>attempts</code>, <code>path</code>, 응답 원문</td><td><code>code_format = "fenced"</code>, <code>supports_json_schema</code> 확인</td></tr>
+<tr><td><code>불안정: 소스가 같은데 빌드마다 결과가 달랐습니다</code></td><td>케이스 보드</td><td>시간·순서·초기화되지 않은 메모리 의존. 규칙 md에 금지 추가</td></tr>
+<tr><td>분석이 이상함 (타입·매크로 누락)</td><td><code>analysis/*.json</code>의 <code>parse_errors</code>, <code>dropped_flags</code></td><td>compile DB 플래그를 libclang이 못 읽음. <code>analysis/flag_sanitizer.yaml</code>에 제거 플래그 추가(커널)</td></tr>
+<tr><td>커버리지가 안 나옴</td><td><code>genut doctor</code> 커버리지 도구, <code>coverage/</code></td><td>gcov가 PATH에 있는지, <code>coverage_opt_level = "O0"</code>, KUnit은 <code>--coverage-out</code> 구현과 <code>CONFIG_GCOV_KERNEL</code></td></tr>
+<tr><td>터미널 한국어가 깨짐</td><td>—</td><td>Windows 콘솔: <code>PYTHONIOENCODING=utf-8</code> 또는 UTF-8 터미널</td></tr>
+</table></div>
+
+<h3>8.2 실행 기록 읽기</h3>
+<div class="tbl"><table>
+<tr><th><code>trace.jsonl</code>의 <code>type</code></th><th>내용</th></tr>
+<tr><td><code>stage_start</code> / <code>stage_end</code></td><td>단계 시작·끝과 걸린 시간</td></tr>
+<tr><td><code>message</code></td><td>터미널에 찍힌 줄 그대로</td></tr>
+<tr><td><code>llm_call</code></td><td>에이전트 호출 (프롬프트 파일, 토큰, 잘린 조각, 사용량)</td></tr>
+<tr><td><code>testability</code></td><td>Analyzer 판정</td></tr>
+<tr><td><code>fix</code></td><td>수정 한 번 (분류, 요약, 권장·선택·적용 전략, 이유)</td></tr>
+<tr><td><code>isolation</code></td><td>크래시 격리 재실행과 재현 여부</td></tr>
+<tr><td><code>coverage</code></td><td>커버리지 측정 결과</td></tr>
+<tr><td><code>shared_rollback</code></td><td>공유 영역 변경 되돌림</td></tr>
+<tr><td><code>agent_error</code>, <code>stop</code>, <code>internal_error</code></td><td>에이전트 실패, 실행 중단, 내부 오류</td></tr>
+<tr><td><code>note_saved</code>, <code>note_rejected</code></td><td>지식 노트 저장(범위·강등 이유)과 버린 노트</td></tr>
+</table></div>
+<pre class="term">R=~/.genut/products/sample/runs/&lt;실행 ID&gt;
+grep '"type": "fix"' $R/trace.jsonl          # 수정 이력
+grep '"type": "stop"' $R/trace.jsonl         # 멈춘 이유
+grep -l '"trims": \[{' $R/prompts/*.md       # 한도 때문에 잘린 프롬프트</pre>
+
+<h3>8.3 중단된 실행 마무리</h3>
+<p>Ctrl+C, 예산 소진, <code>--stop-after</code>로 끝난 실행도 그때까지의 통과 케이스는 <code>state.json</code>과 녹색 스냅샷에 남습니다. <code>genut finalize &lt;실행&gt;</code>은 LLM 없이 그 실행에 쓴 설정 그대로 최종 확인만 다시 해서 설치합니다.</p>
+</details>
+
+<!-- ============================================================ 9 -->
+<details class="sec" id="s9" open>
+<summary><span class="n">9</span>튜닝: 성공률과 비용 개선</summary>
+
+<figure class="fig"><div class="scroll"><svg viewBox="0 0 920 170" role="img" aria-label="튜닝 루프. 실행 기록 보기, 가설과 변경, 비용 없는 replay, diff로 비교, eval로 코퍼스 측정, 기준치 비교 후 다시 실행 기록 보기로 돌아간다">
+<defs><marker id="f10a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="bx" x="10" y="30" width="140" height="64" rx="8"/><text class="t" x="80" y="56" text-anchor="middle">① 기록 보기</text><text class="ms" x="80" y="76" text-anchor="middle">genut view</text>
+<rect class="warn" x="190" y="30" width="150" height="64" rx="8"/><text class="t" x="265" y="56" text-anchor="middle">② 가설·변경</text><text class="s" x="265" y="76" text-anchor="middle">규칙·프롬프트·예산</text>
+<rect class="hi" x="380" y="30" width="150" height="64" rx="8"/><text class="t" x="455" y="56" text-anchor="middle">③ 비용 없이 확인</text><text class="ms" x="455" y="76" text-anchor="middle">genut replay --set</text>
+<rect class="hi" x="570" y="30" width="150" height="64" rx="8"/><text class="t" x="645" y="56" text-anchor="middle">④ 비교</text><text class="ms" x="645" y="76" text-anchor="middle">genut diff A B</text>
+<rect class="ok" x="760" y="30" width="150" height="64" rx="8"/><text class="t" x="835" y="56" text-anchor="middle">⑤ 코퍼스 측정</text><text class="ms" x="835" y="76" text-anchor="middle">genut eval --label</text>
+<line class="ln" x1="150" y1="62" x2="188" y2="62" marker-end="url(#f10a)"/><line class="ln" x1="340" y1="62" x2="378" y2="62" marker-end="url(#f10a)"/>
+<line class="ln" x1="530" y1="62" x2="568" y2="62" marker-end="url(#f10a)"/><line class="ln" x1="720" y1="62" x2="758" y2="62" marker-end="url(#f10a)"/>
+<path class="ln dash" d="M835,94 L835,140 L80,140 L80,96" marker-end="url(#f10a)"/><text class="s" x="300" y="130">기준치(--save-baseline)와 자동 비교 → 나아졌으면 유지, 아니면 되돌리고 다음 가설</text>
+</svg></div><figcaption>그림 10. 튜닝 루프. replay와 diff는 LLM 비용이 들지 않습니다.</figcaption></figure>
+
+<h3>9.1 무엇을 바꾸면 되나</h3>
+<div class="tbl"><table>
+<tr><th>증상</th><th>바꿀 것</th><th>위치</th></tr>
+<tr><td>같은 실수가 반복 (초기화 누락, 금지 API)</td><td>규칙 한 줄 추가</td><td><code>~/.genut/rules/*.md</code> 또는 프로덕트 <code>rules/</code></td></tr>
+<tr><td>쓸모없는 케이스가 통과</td><td><code>## 리뷰에서 거부할 패턴</code>에 정규식</td><td>규칙 md</td></tr>
+<tr><td>역할이 지시를 잘못 이해</td><td>역할 지시문의 해당 절만 덮어쓰기</td><td><code>~/.genut/prompts/&lt;role&gt;.md</code></td></tr>
+<tr><td>컴파일 오류가 엉뚱한 분류</td><td>패턴 추가 (위에서부터 처음 맞는 규칙)</td><td><code>src/genut/verify/classify.yaml</code></td></tr>
+<tr><td>Fixer가 로그를 이해 못 함</td><td>축약 우선순위·상한</td><td><code>src/genut/verify/logs/reduce.yaml</code>, <code>log_token_budget</code></td></tr>
+<tr><td>커널 플래그로 분석 실패</td><td>제거 플래그 추가</td><td><code>src/genut/analysis/flag_sanitizer.yaml</code></td></tr>
+<tr><td>시간·비용 초과</td><td><code>max_builds_per_run</code>, <code>max_iterations</code>, <code>max_case_fixes</code>, <code>max_coverage_rounds</code>, <code>max_tokens_per_function</code></td><td><code>config.toml</code> / <code>product.toml</code> / <code>--set</code></td></tr>
+<tr><td>중형 모델에서 케이스 품질이 낮음</td><td><code>candidates = 3</code></td><td><code>[budget]</code></td></tr>
+<tr><td>프롬프트가 잘림</td><td><code>analysis_token_budget</code>, <code>knowledge_token_budget</code>, <code>passed_cases_token_budget</code>, <code>output_reserve_tokens</code></td><td><code>[budget]</code>, <code>[llm.context]</code></td></tr>
+<tr><td>커버리지 목표가 과함</td><td><code>target_line_percent</code></td><td><code>[coverage]</code></td></tr>
+</table></div>
+
+<h3>9.2 예시 1: 예산을 바꾸면 어떻게 되나 (replay → diff)</h3>
+<div class="step">
+<div class="head"><span class="num">1</span><b>기록된 응답으로 replay</b><span class="who">LLM 비용 없음</span></div>
+<p>"수정을 아예 안 하면(<code>max_case_fixes=0</code>) 결과가 얼마나 나빠지나?"를 확인합니다.</p>
+<pre class="term">$ genut replay latest --set budget.max_case_fixes=0 --home ~/.genut
+[1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개
+[2/8] 스텁     rb_push: 스텁 0개
+[3/8] 사전검증   뼈대 빌드 OK (0.9s)
+[4/8] 스모크    rb_push: 케이스 1개 생성
+[4/8] 스모크    rb_push: 통과 1 · 실패 0 · 제거 0
+[5/8] 확장     rb_push: 케이스 3개 생성
+[6/8] 수정     round 1: drop(test_rb_push_full: 수정 한도) · drop(test_rb_push_exact_fit: 수정 한도)
+[5/8] 확장     rb_push: 통과 2 · 실패 0 · 제거 2
+[6/8] 수정     rb_push: 통과 2 · 실패 0 · 제거 2
+[7/8] 커버리지   rb_push: 라인 77% (10/13) · 미커버 :33 :34 :38
+[7/8] 커버리지   rb_push: 케이스 1개 생성
+[7/8] 커버리지   rb_push: 라인 85% (11/13) · 미커버 :33 :34
+[확인] rb_push: partial · 최종 확인 ok → ~/work/sample/tests/generated/ring_buffer_rb_push_test.cc
+[참고] infra_error: LLM 호출 실패(작성(coverage)): 기록된 응답이 더 없습니다: test_writer. --from으로 실제 provider를 쓰세요.
+완료 · 빌드 5 · 토큰 0 · 7s → ~/.genut/products/sample/runs/20261022-154259-replay-20261022-154248-ring_buffer-rb_push</pre>
+<p>수정을 안 하니 커버리지 라운드가 기록보다 많은 케이스를 요구해 <b>기록된 응답이 바닥나</b> 멈췄습니다(<code>[참고]</code> 줄). 통과분은 그래도 설치되었습니다.</p>
+</div>
+<div class="step">
+<div class="head"><span class="num">2</span><b>그 단계부터 실제 LLM: <code>--from coverage</code></b></div>
+<p>앞 단계는 기록으로 재생하고 커버리지 단계부터만 LLM을 부릅니다. 이 예시는 실제 LLM 대신 커버리지용 응답만 담은 다른 fake 스크립트를 줬습니다.</p>
+<pre class="term">$ genut replay 20261022-154248-ring_buffer-rb_push --from coverage --set budget.max_case_fixes=0 --set llm.fake.script=~/demo/live_script.json --home ~/.genut
+[1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개
+[2/8] 스텁     rb_push: 스텁 0개
+[3/8] 사전검증   캐시 사용 (뼈대·환경이 이전 성공과 같음, 0.9s)
+[4/8] 스모크    rb_push: 케이스 1개 생성
+[4/8] 스모크    rb_push: 통과 1 · 실패 0 · 제거 0
+[5/8] 확장     rb_push: 케이스 3개 생성
+[6/8] 수정     round 1: drop(test_rb_push_full: 수정 한도) · drop(test_rb_push_exact_fit: 수정 한도)
+[5/8] 확장     rb_push: 통과 2 · 실패 0 · 제거 2
+[6/8] 수정     rb_push: 통과 2 · 실패 0 · 제거 2
+[7/8] 커버리지   rb_push: 라인 77% (10/13) · 미커버 :33 :34 :38
+[7/8] 커버리지   rb_push: 케이스 2개 생성
+[7/8] 커버리지   rb_push: 라인 100% (13/13)
+[8/8] 리뷰     rb_push: 지적 0건
+[확인] rb_push: partial · 최종 확인 ok → ~/work/sample/tests/generated/ring_buffer_rb_push_test.cc
+완료 · 빌드 4 · 토큰 5049 · 6s → ~/.genut/products/sample/runs/20261022-154306-replay-20261022-154248-ring_buffer-rb_push</pre>
+</div>
+<div class="step">
+<div class="head"><span class="num">3</span><b>원래 실행과 비교: <code>genut diff</code></b></div>
+<pre class="term">$ genut diff 20261022-154248-ring_buffer-rb_push latest --home ~/.genut
+실행 비교: A 20261022-154248-ring_buffer-rb_push → B 20261022-154306-replay-20261022-154248-ring_buffer-rb_push
+  대상: ~/work/sample/src/ring_buffer.c (gtest)
+  B는 A의 replay입니다 (--from coverage부터 실제 LLM)
+
+바뀐 입력
+  provider: fake → replay
+  설정 budget.max_case_fixes: 2 → 0
+  설정 llm.fake.script: '~/demo/llm_script.json' → '~/demo/live_script.json'
+
+결과
+  함수 complete 1 → 0, partial 0 → 1
+  케이스 통과 5/5 → 4/6 · 제거 0 → 2
+  빌드 6 → 4 (-2) · 토큰 17614 → 5049 (-12565) · 소요 9.7s → 6.3s (-3.4)
+  LLM 호출 8 → 5 (-3): analyzer 1, fixer 2 → 0, note_keeper 1 → 0, reviewer 1, test_writer 3
+  수정한 실패 분류: assertion_failed 1 → 0, crash 1 → 0
+
+함수별
+  rb_push: complete → partial · 통과 5/5 → 4/6 · 커버리지 100%
+    test_rb_push_full: 통과 → 제거 (A: new → fail → new → pass / B: new → fail → dropped [assertion_failed]) · 수정 1회 → 0회 · 본문 다름
+    test_rb_push_exact_fit: 통과 → 제거 (A: new → crash → new → pass / B: new → crash → dropped [crash]) · 수정 1회 → 0회 · 본문 다름
+    test_rb_push_too_long: B에만 있음 (통과, new → pass)
+    그대로: 3개</pre>
+<p>수정 2건이 없어지자 두 케이스가 제거되어 <code>complete → partial</code>이 되었고, 커버리지는 새 케이스(<code>test_rb_push_too_long</code>)로 다시 100%가 되었습니다. 빌드는 2번, 토큰은 12565 줄었습니다. <b>입력 변화와 결과 변화를 한 화면에서</b> 봅니다.</p>
+</div>
+
+<h3>9.3 예시 2: 코퍼스로 측정하기 (eval)</h3>
+<p>여러 함수를 담은 코퍼스(TOML)로 성공률을 재고 기준치를 저장한 뒤, 변경 후와 비교합니다. 평가는 측정만 하고 설치하지 않으며 지식 노트도 남기지 않습니다.</p>
+<div class="grid2">
+<pre style="margin:0"># corpus.toml
+[[item]]
+file = "src/ring_buffer.c"
+function = "rb_init"
+
+[[item]]
+file = "src/ring_buffer.c"
+function = "rb_used"</pre>
+<div class="card"><b>결과 위치</b><span><code>products/&lt;이름&gt;/evals/runs/&lt;시각&gt;-&lt;라벨&gt;/</code>의 <code>results.json</code>, <code>report.md</code>, <code>report.html</code>. 기준치는 <code>~/.genut/evals/baselines/&lt;모델&gt;.json</code>. 리포트에 규칙 md 해시와 역할 프롬프트 해시가 있어 무엇이 바뀌었는지 추적할 수 있습니다. 다른 결과와 비교하려면 <code>--compare &lt;results.json&gt;</code>.</span></div>
+</div>
+<pre class="term">$ genut eval --corpus ~/demo/corpus.toml --label rules-v1 --save-baseline --home ~/.genut --product sample --set llm.fake.script=~/demo/eval_script.json
+[1/2] src/ring_buffer.c:rb_init → rb_init complete (2/2)
+[2/2] src/ring_buffer.c:rb_used → rb_used partial (1/2)
+  complete 비율       50.0%
+  일부라도 건진 비율       100.0%
+  케이스 빌드율          100.0%
+  케이스 통과율           75.0%
+  평균 라인 커버리지       100.0%
+  평균 빌드 횟수            3.5
+  평균 수정 라운드           0.5
+  함수당 평균 토큰        7613.5
+  평균 소요(초)              5
+리포트: ~/.genut/products/sample/evals/runs/20261022-154542-rules-v1/report.html
+기준치 저장: ~/.genut/evals/baselines/fake-model.json</pre>
+<p>규칙을 고친 뒤(이 예시에서는 <code>rb_used</code> 케이스의 기대값을 바르게 쓰도록 응답을 바꿈) 같은 코퍼스로 다시 재면 같은 모델의 기준치와 자동으로 비교합니다.</p>
+<pre class="term">$ genut eval --corpus ~/demo/corpus.toml --label rules-v2 --home ~/.genut --product sample --set llm.fake.script=~/demo/eval_script.json
+[1/2] src/ring_buffer.c:rb_init → rb_init complete (2/2)
+[2/2] src/ring_buffer.c:rb_used → rb_used complete (2/2)
+  complete 비율      100.0%  (기준 50.0%, +50.0%p 개선)
+  일부라도 건진 비율       100.0%
+  케이스 빌드율          100.0%
+  케이스 통과율          100.0%  (기준 75.0%, +25.0%p 개선)
+  평균 라인 커버리지       100.0%
+  평균 빌드 횟수            3.5
+  평균 수정 라운드             0  (기준 0.5, -0.5 개선)
+  함수당 평균 토큰        6506.5  (기준 7613.5, -1107.0 개선)
+  평균 소요(초)            4.7  (기준 5, -0.3 개선)
+리포트: ~/.genut/products/sample/evals/runs/20261022-154552-rules-v2/report.html</pre>
+
+<h3>9.4 Gemma 4(중형 모델) 튜닝 요령</h3>
+<div class="tbl"><table>
+<tr><th>항목</th><th>권장</th></tr>
+<tr><td>컨텍스트</td><td><code>max_context</code>를 서버 설정과 정확히 맞춤. 넘치면 서버가 앞부분(규칙!)을 조용히 자를 수 있음. GenUT는 <code>limit</code> 안으로 조립하고 잘린 조각을 <code>trims</code>에 남김</td></tr>
+<tr><td>응답 자리</td><td><code>output_reserve_tokens</code>(기본 6000). 응답이 길이 한도로 끊기면 자동으로 두 배로 1회 재요청</td></tr>
+<tr><td>출력 형식</td><td>서버가 JSON 스키마 제약을 지원하면 <code>supports_json_schema = true</code>. 코드가 든 JSON 문자열을 자주 망가뜨리면 <code>code_format = "fenced"</code></td></tr>
+<tr><td>후보 수</td><td><code>candidates = 3</code>: 같은 요청을 3번 받아 케이스 단위로 합침</td></tr>
+<tr><td>토큰 세기</td><td>기본은 보수적 추정. vLLM처럼 <code>/tokenize</code>가 있으면 <code>token_counter = "api"</code></td></tr>
+<tr><td>측정</td><td>바꿀 때마다 <code>genut eval --label</code>로 같은 코퍼스를 재고 Claude 기준치와 <code>--compare</code></td></tr>
+</table></div>
+
+<h3>9.5 지식 관리</h3>
+<pre class="term">$ genut knowledge list --candidates --home ~/.genut
+[assertion_failed]
+  5df61f95  단정 실패를 고칠 때는 분석 보고서의 반환 지점과 조건 줄을 근거로 기대값을 정하면 한 번에 고쳐진다  [assertion_failed] 전략 fix_case (실행 1회)  · 같은 노트가 있는 프로덕트 1개: sample
+승격 기준: 프로덕트 2개. 직접 올리려면 genut knowledge promote &lt;id&gt;</pre>
+<div class="tbl"><table>
+<tr><th>명령</th><th>언제</th></tr>
+<tr><td><code>genut knowledge list</code></td><td>어떤 노트가 프롬프트에 들어가는지 확인</td></tr>
+<tr><td><code>genut knowledge list --candidates</code></td><td>공통 후보를 분류별로 보고 승격할 것 고르기</td></tr>
+<tr><td><code>genut knowledge promote &lt;id&gt;</code></td><td>사람이 공통으로 올림 (프로덕트 경로·설정값이 있으면 <code>--force</code> 필요)</td></tr>
+<tr><td><code>genut knowledge demote &lt;id&gt;</code></td><td>공통 노트가 특정 프로덕트에만 맞을 때 내림</td></tr>
+<tr><td><code>genut knowledge edit</code></td><td>틀린 노트 고치기·지우기 (한 줄에 하나, 끝의 <code>&lt;!-- genut ... --&gt;</code> 주석은 그대로)</td></tr>
+</table></div>
+</details>
+
+<!-- ============================================================ 10 -->
+<details class="sec" id="s10" open>
+<summary><span class="n">10</span>알려진 한계</summary>
+<div class="tbl"><table>
+<tr><th>한계</th><th>영향</th><th>우회</th></tr>
+<tr><td>스텁 도구 미연동</td><td>정의 없는 심볼을 부르는 경로는 테스트하지 않음, static 함수는 gtest에서 테스트 불가</td><td><code>link_targets</code>로 실제 정의 링크, KUnit은 <code>static_access = "include_source"</code>. 스텁 도구 md를 받으면 연동 예정</td></tr>
+<tr><td>KUnit을 실제 커널·QEMU로 검증하지 않음</td><td>계약은 가짜 스크립트로만 확인</td><td>첫 적용 때 <code>--stop-after preflight</code>로 빌드부터 확인</td></tr>
+<tr><td>gtest 단정 실패 요약이 <code>파일:줄: Failure</code> 한 줄</td><td>수정 사례의 메시지 패턴이 모든 단정 실패에서 같아짐 (Fixer는 상세 메시지를 받으므로 수정에는 지장 없음)</td><td>—</td></tr>
+<tr><td>노트의 "같은 노트" 판정이 문장 정규화 기반</td><td>표현이 다르면 자동 승격이 잘 안 됨</td><td><code>knowledge list --candidates</code>로 보고 직접 <code>promote</code></td></tr>
+<tr><td><code>genut eval</code>이 수정 사례·소스 버그 의심은 계속 기록</td><td>반복 평가 사이에 Fixer 예시가 달라질 수 있음</td><td>기준치 비교 시 같은 상태의 홈에서 측정</td></tr>
+<tr><td><code>--interactive</code> 없음</td><td>단계 사이에 사람이 편집할 수 없음</td><td><code>--stop-after</code> + <code>finalize</code>, <code>replay --from</code></td></tr>
+<tr><td>템플릿·추상 클래스 멤버, private 멤버</td><td>C++에서 테스트 불가로 끝남</td><td>공개 API를 통한 간접 테스트</td></tr>
+</table></div>
+</details>
+
+<!-- ============================================================ A -->
+<details class="sec" id="sa">
+<summary><span class="n">A</span>설정 레퍼런스</summary>
+<p>모든 키와 기본값입니다(<code>src/genut/config.py</code>). <code>config.toml</code>(공통)과 <code>product.toml</code>(프로덕트)에 같은 형식으로 씁니다.</p>
+<div class="tbl"><table>
+<tr><th>키</th><th>기본값</th><th>설명</th></tr>
+<tr><td><code>llm.provider</code></td><td><code>anthropic</code></td><td><code>anthropic</code> | <code>openai_compat</code> | <code>fake</code></td></tr>
+<tr><td><code>llm.model</code></td><td><code>claude-opus-5-5</code></td><td>anthropic 모델</td></tr>
+<tr><td><code>llm.temperature</code></td><td>0.2</td><td>openai_compat에만 보냄</td></tr>
+<tr><td><code>llm.prompt_language</code></td><td><code>en</code></td><td>역할 지시문 언어</td></tr>
+<tr><td><code>llm.code_format</code></td><td><code>json</code></td><td><code>json</code> | <code>fenced</code></td></tr>
+<tr><td><code>llm.max_retries</code></td><td>4</td><td>전송 오류 재시도</td></tr>
+<tr><td><code>llm.anthropic.api_key_env</code></td><td><code>ANTHROPIC_API_KEY</code></td><td>키를 읽을 환경 변수</td></tr>
+<tr><td><code>llm.anthropic.effort</code> / <code>max_output_tokens</code></td><td><code>medium</code> / 16000</td><td></td></tr>
+<tr><td><code>llm.openai_compat.base_url</code> / <code>model</code></td><td><code>http://gemma4.internal/v1</code> / <code>gemma-4-12b</code></td><td></td></tr>
+<tr><td><code>llm.openai_compat.api_key_env</code></td><td><code>GENUT_LLM_KEY</code></td><td>키가 필요 없는 서버면 비움</td></tr>
+<tr><td><code>llm.openai_compat.max_context</code> / <code>supports_json_schema</code></td><td>32768 / true</td><td></td></tr>
+<tr><td><code>llm.fake.script</code></td><td><code>""</code></td><td>fake provider 응답 JSON</td></tr>
+<tr><td><code>llm.context.output_reserve_tokens</code></td><td>6000</td><td>응답 자리</td></tr>
+<tr><td><code>llm.context.context_safety_margin</code></td><td>0.05</td><td>추정 오차 여유</td></tr>
+<tr><td><code>llm.context.token_counter</code></td><td><code>estimate</code></td><td><code>estimate</code> | <code>api</code></td></tr>
+<tr><td><code>budget.*</code></td><td>3.5절</td><td>+ <code>log_token_budget</code> 4000, <code>analysis_token_budget</code> 3000, <code>knowledge_token_budget</code> 1500, <code>passed_cases_token_budget</code> 4000, <code>fix_examples_token_budget</code> 1500, <code>slow_build_threshold_sec</code> 120</td></tr>
+<tr><td><code>coverage.enabled</code> / <code>target_line_percent</code> / <code>tool</code></td><td>true / 100 / <code>gcov</code></td><td><code>llvm-cov</code>도 가능 (gtest)</td></tr>
+<tr><td><code>finalize.install_unverified</code></td><td>false</td><td>최종 확인 못 한 통과 케이스도 표시와 함께 설치할지</td></tr>
+<tr><td><code>knowledge.auto_promote_after_products</code></td><td>2</td><td>같은 노트가 몇 개 프로덕트에서 나오면 공통으로</td></tr>
+<tr><td><code>knowledge.note_keeper</code> / <code>max_notes_per_run</code></td><td>true / 5</td><td></td></tr>
+<tr><td><code>analysis.include_struct_fields</code> / <code>max_struct_fields</code></td><td>true / 30</td><td>보고서의 구조체 필드</td></tr>
+<tr><td><code>analysis.libclang_path</code> / <code>resource_dir</code></td><td><code>""</code></td><td>비우면 자동</td></tr>
+<tr><td><code>product.name</code> / <code>root</code> / <code>backend</code></td><td></td><td><code>genut product add</code>가 씀</td></tr>
+<tr><td><code>gtest.*</code></td><td>4.6절</td><td>+ <code>cmake_exe</code> <code>cmake</code>, <code>gtest_root</code> <code>""</code></td></tr>
+<tr><td><code>kunit.*</code></td><td>4.8절</td><td><code>kernel_src</code>(비우면 프로덕트 루트), <code>test_file_pattern</code> <code>{src}_{func}_test.c</code>, <code>script_timeout_sec</code> 3600</td></tr>
+</table></div>
+</details>
+
+<!-- ============================================================ B -->
+<details class="sec" id="sb">
+<summary><span class="n">B</span>용어집</summary>
+<div class="tbl"><table>
+<tr><th>용어</th><th>뜻</th></tr>
+<tr><td>케이스</td><td>테스트 하나 (<code>TEST_F</code> 하나, KUnit 케이스 함수 하나). 진행·수정·보존의 단위</td></tr>
+<tr><td>뼈대</td><td>케이스를 뺀 테스트 파일 (include, fixture, 등록 코드). 항상 코드가 만듦</td></tr>
+<tr><td>공유 영역</td><td>여러 케이스가 함께 쓰는 include·헬퍼·SetUp/TearDown. 판이 있어 되돌릴 수 있음</td></tr>
+<tr><td>분석 보고서</td><td>libclang 추출 결과를 LLM이 읽기 좋게 정리한 것</td></tr>
+<tr><td>링크 범위</td><td>호출하는 심볼의 정의가 링크 시 있는지 (<code>same_tu</code>, <code>linkable</code>, <code>external</code>, <code>undefined</code>)</td></tr>
+<tr><td>사전검증</td><td>케이스 없는 뼈대만 빌드해 환경을 먼저 확인</td></tr>
+<tr><td>스모크</td><td>케이스 하나로 기본 경로를 확인하는 단계</td></tr>
+<tr><td>전략 사다리</td><td><code>fix_case → add_stub → drop_case → narrow_scope → give_up</code></td></tr>
+<tr><td>크래시 브리프</td><td>크래시 분류, 책임 프레임, 호출 체인, 용의 케이스, 가설을 담은 요약</td></tr>
+<tr><td>격리</td><td>크래시를 낸 케이스를 찾으려고 의심 케이스만 다시 실행</td></tr>
+<tr><td>도달 조건</td><td>미커버 줄에 닿기 위한 가장 가까운 분기 조건과 관련 호출</td></tr>
+<tr><td>녹색 스냅샷</td><td>포함된 케이스가 모두 통과한 빌드의 테스트 파일. 최종 확인이 깨지면 되돌아갈 곳</td></tr>
+<tr><td>최종 확인</td><td>통과 케이스만으로 다시 빌드·실행해 설치 전에 확인</td></tr>
+<tr><td>집합 파일 (KUnit)</td><td>함수별 테스트 파일을 <code>#include</code>하고 스위트를 등록하는 파일. Makefile에 한 번 등록</td></tr>
+<tr><td>실행 기록</td><td><code>runs/&lt;시각&gt;-&lt;라벨&gt;/</code>. 실행의 모든 입력·출력·로그</td></tr>
+<tr><td>replay</td><td>기록된 LLM 응답으로 다시 실행</td></tr>
+<tr><td>공통 후보</td><td>공통으로 제안됐지만 아직 한 프로덕트에서만 나온 노트</td></tr>
+<tr><td>정규화 키</td><td>실패 분류 + 전략 + 식별자·경로·숫자를 자리표시자로 바꾼 문장의 해시</td></tr>
+</table></div>
+</details>
+
+</main>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var btnTheme = document.getElementById('btnTheme');
+  var btnAll = document.getElementById('btnAll');
+  var secs = Array.prototype.slice.call(document.querySelectorAll('details.sec'));
+  function currentDark() {
+    var t = root.getAttribute('data-theme');
+    if (t === 'dark') return true;
+    if (t === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  btnTheme.addEventListener('click', function () {
+    var next = currentDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('genut-guide-theme', next); } catch (e) {}
+  });
+  try {
+    var saved = localStorage.getItem('genut-guide-theme');
+    if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+  } catch (e) {}
+  function allOpen() { return secs.every(function (d) { return d.open; }); }
+  function syncBtn() { btnAll.textContent = allOpen() ? '모두 접기' : '모두 펼치기'; }
+  btnAll.addEventListener('click', function () {
+    var open = !allOpen();
+    secs.forEach(function (d) { d.open = open; });
+    syncBtn();
+  });
+  secs.forEach(function (d) { d.addEventListener('toggle', syncBtn); });
+  // 목차 링크를 누르면 그 절(과 안쪽 위치를 담은 절)을 연다
+  function openFor(el) { while (el) { if (el.tagName === 'DETAILS') el.open = true; el = el.parentElement; } }
+  document.querySelectorAll('nav.toc a').forEach(function (a) {
+    a.addEventListener('click', function () { openFor(document.querySelector(a.getAttribute('href'))); });
+  });
+  if (location.hash) { openFor(document.querySelector(location.hash)); }
+  syncBtn();
+})();
+</script>
+</body>
+</html>
