@@ -1,0 +1,330 @@
+{
+  "tests": 19,
+  "failures": 19,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-22T16:10:52Z",
+  "time": "0.001s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "Fmt",
+      "tests": 19,
+      "failures": 19,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-22T16:10:52Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "eq_both_values",
+          "file": "fmt_test.cc",
+          "line": 11,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:11\nExpected equality of these values:\n  push(6)\n    Which is: -28\n  0\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "eq_literal",
+          "file": "fmt_test.cc",
+          "line": 12,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:12\nExpected equality of these values:\n  push(6)\n    Which is: -28\n  0\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "eq_literal_first",
+          "file": "fmt_test.cc",
+          "line": 13,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:13\nExpected equality of these values:\n  0\n  push(6)\n    Which is: -28\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "eq_two_calls",
+          "file": "fmt_test.cc",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:14\nExpected equality of these values:\n  push(6)\n    Which is: -28\n  push(1)\n    Which is: 0\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "streq",
+          "file": "fmt_test.cc",
+          "line": 15,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:15\nExpected equality of these values:\n  name(1)\n    Which is: \"partial\"\n  \"empty\"\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "string_eq",
+          "file": "fmt_test.cc",
+          "line": 16,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:16\nExpected equality of these values:\n  std::string(name(1))\n    Which is: \"partial\"\n  \"empty\"\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "ne",
+          "file": "fmt_test.cc",
+          "line": 17,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:17\nExpected: (push(1)) != (0), actual: 0 vs 0\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "lt",
+          "file": "fmt_test.cc",
+          "line": 18,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:18\nExpected: (push(1)) < (-1), actual: 0 vs -1\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "ge",
+          "file": "fmt_test.cc",
+          "line": 19,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:19\nExpected: (push(6)) >= (0), actual: -28 vs 0\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "is_true",
+          "file": "fmt_test.cc",
+          "line": 20,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:20\nValue of: push(6) == 0\n  Actual: false\nExpected: true\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "is_false",
+          "file": "fmt_test.cc",
+          "line": 21,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:21\nValue of: push(1) == 0\n  Actual: true\nExpected: false\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "near",
+          "file": "fmt_test.cc",
+          "line": 22,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:22\nThe difference between 1.5 and 1.0 is 0.5, which exceeds 1e-3, where\n1.5 evaluates to 1.5,\n1.0 evaluates to 1, and\n1e-3 evaluates to 0.001.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "float_eq",
+          "file": "fmt_test.cc",
+          "line": 23,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:23\nExpected equality of these values:\n  1.5f\n    Which is: 1.5\n  1.25f\n    Which is: 1.25\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "that",
+          "file": "fmt_test.cc",
+          "line": 24,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:24\nValue of: push(6)\nExpected: is equal to 0\n  Actual: -28 (of type int)\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "fail_msg",
+          "file": "fmt_test.cc",
+          "line": 25,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:25\nFailed\nrb\u00EA\u00B0\u0080 \u00EC\u00B4\u0088\u00EA\u00B8\u00B0\u00ED\u0099\u0094\u00EB\u0090\u0098\u00EC\u00A7\u0080 \u00EC\u0095\u008A\u00EC\u009D\u008C\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "with_message",
+          "file": "fmt_test.cc",
+          "line": 26,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:26\nExpected equality of these values:\n  push(6)\n    Which is: -28\n  0\n\u00EC\u009A\u00A9\u00EB\u009F\u0089 4\u00EC\u0097\u0090 6\u00EB\u00B0\u0094\u00EC\u009D\u00B4\u00ED\u008A\u00B8\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "two_failures",
+          "file": "fmt_test.cc",
+          "line": 27,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:27\nExpected equality of these values:\n  push(6)\n    Which is: -28\n  0\n",
+              "type": ""
+            },
+            {
+              "failure": "fmt_test.cc:27\nExpected equality of these values:\n  push(7)\n    Which is: -28\n  1\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "exception",
+          "file": "fmt_test.cc",
+          "line": 28,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"boom\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "ptr_null",
+          "file": "fmt_test.cc",
+          "line": 29,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-22T16:10:52Z",
+          "time": "0s",
+          "classname": "Fmt",
+          "failures": [
+            {
+              "failure": "fmt_test.cc:29\nExpected equality of these values:\n  p\n    Which is: 0x7ff6be78f07d\n  nullptr\n    Which is: (nullptr)\n",
+              "type": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

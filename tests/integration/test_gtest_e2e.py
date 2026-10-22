@@ -98,7 +98,9 @@ def test_build_run_crash_and_install(project, tmp_path):
     run = be.run(r, tmp_path / "r2")
     status = {k: v.status for k, v in run.results.items()}
     assert status == {"test_rb_push_ok": "pass", "test_rb_push_full": "fail", "test_rb_push_bad_buf": "crash", "test_rb_push_null": "not_run"}
-    assert "-28" in run.results["test_rb_push_full"].observed  # 실제값(RB_ENOSPC)이 수정 단서로 남는다
+    full = run.results["test_rb_push_full"]
+    assert "-28" in full.observed  # 실제값(RB_ENOSPC)이 수정 단서로 남는다
+    assert full.message == '같지 않음: rb_push(&rb, "abcdef", 6) [-28] ≠ RB_OK [0]' and (full.expected, full.actual) == ("0", "-28")
     assert run.crash.suspect_case == "test_rb_push_bad_buf" and run.crash.category == "segv"
     if shutil.which("gdb"):
         assert run.crash.location.endswith("ring_buffer.c:39") and run.crash.chain[-1].startswith("rb_push")

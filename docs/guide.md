@@ -246,6 +246,21 @@ fix_case  →  add_stub  →  drop_case  →  narrow_scope  →  give_up
 
 컴파일 오류 분류 규칙은 `src/genut/verify/classify.yaml`에 있어 코드 수정 없이 패턴을 추가할 수 있습니다(위에서부터 처음 맞는 규칙을 씀).
 
+#### gtest 단정 실패를 읽는 법
+
+gtest가 낸 실패 메시지는 단정 종류별로 식과 값을 뽑아 한 줄로 요약합니다. 이 요약이 터미널·리포트·수정 기록·Fixer 프롬프트의 "요약"이고, 원문 메시지는 "상세"에 그대로 남습니다. `[ ]` 안이 실행 중 계산된 값입니다.
+
+| 단정 | 요약 예 | 기대값 · 실제값 |
+|---|---|---|
+| `EXPECT_EQ` / `STREQ` / `FLOAT_EQ` | `같지 않음: rb_push(&rb, "abcdef", 6) [-28] ≠ RB_OK [0]` | 한쪽에만 함수 호출이 있으면 그쪽을 실제값으로 채움 (인자 순서와 무관). 둘 다 호출이면 비움 |
+| `EXPECT_NE` / `LT` / `LE` / `GT` / `GE` | `비교 실패: push(1) < -1 아님 (값 0, -1)` | 비움 |
+| `EXPECT_TRUE` / `FALSE` | `참·거짓 불일치: push(6) == 0 → false (기대 true)` | `true` · `false` |
+| `EXPECT_THAT` | `조건 불일치: push(6) → -28 (기대: is equal to 0)` | 매처 설명 · 값 |
+| `EXPECT_NEAR` | `오차 초과: \|1.5 - 1.0\| = 0.5 > 1e-3 (값 1.5, 1)` | 비움 |
+| `FAIL()`, 예외 | `FAIL(): 메시지`, `예외: C++ exception with description ...` | 비움 |
+
+`<< "메시지"`로 붙인 설명은 `— 메시지`로 덧붙고, 한 케이스에 실패가 여럿이면 첫 실패를 요약하고 `외 N건`을 붙입니다. 기대값·실제값은 Fixer 프롬프트에 `기대값: … · 실제값: …`으로 들어가고, 실제값 베끼기 검사는 기대값 쪽 값을 베끼기로 보지 않습니다.
+
 ### 3.3 코드가 하는 리뷰 검사
 
 케이스가 통과하면 즉시 코드가 다음을 확인합니다. 걸리면 `review_reject`로 수정 루프에 들어갑니다.
@@ -752,7 +767,7 @@ $ genut gen --file src/ring_buffer.c --func rb_push --dry-run --home ~/.genut
 [7/8] 커버리지   dry-run이라 측정하지 않음
 [확인] rb_push: none · 최종 확인 -
 [참고] rb_push: Analyzer가 테스트 불가로 판정했지만 코드가 확인한 신호가 없어 진행합니다: 
-완료 · 빌드 0 · 토큰 5362 · 2s → ~/.genut/products/sample/runs/20261022-154246-ring_buffer-rb_push
+완료 · 빌드 0 · 토큰 5362 · 1s → ~/.genut/products/sample/runs/20261022-161833-ring_buffer-rb_push
 ```
 
 여러 함수의 분석만 보고 싶으면 `--stop-after analyze`:
@@ -767,7 +782,7 @@ $ genut gen --file src/ring_buffer.c --stop-after analyze --home ~/.genut
 [확인] rb_push: none · 최종 확인 -
 [확인] rb_used: none · 최종 확인 -
 [확인] rb_state_name: none · 최종 확인 -
-완료 · 빌드 0 · 토큰 6316 · 0s → ~/.genut/products/sample/runs/20261022-154313-ring_buffer
+완료 · 빌드 0 · 토큰 6316 · 0s → ~/.genut/products/sample/runs/20261022-161900-ring_buffer
 ```
 
 ### 6.2 생성 실행
@@ -776,7 +791,7 @@ $ genut gen --file src/ring_buffer.c --stop-after analyze --home ~/.genut
 $ genut gen --file src/ring_buffer.c --func rb_push --home ~/.genut
 [1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개
 [2/8] 스텁     rb_push: 스텁 0개
-[3/8] 사전검증   뼈대 빌드 OK (1.1s)
+[3/8] 사전검증   뼈대 빌드 OK (1.0s)
 [4/8] 스모크    rb_push: 케이스 1개 생성
 [4/8] 스모크    rb_push: 통과 1 · 실패 0 · 제거 0
 [5/8] 확장     rb_push: 케이스 3개 생성
@@ -789,7 +804,7 @@ $ genut gen --file src/ring_buffer.c --func rb_push --home ~/.genut
 [8/8] 리뷰     rb_push: 지적 0건
 [노트] 2개 저장 (프로덕트 1 · 공통 후보 1 · 공통 0)
 [확인] rb_push: complete · 최종 확인 ok → ~/work/sample/tests/generated/ring_buffer_rb_push_test.cc
-완료 · 빌드 6 · 토큰 17614 · 10s → ~/.genut/products/sample/runs/20261022-154248-ring_buffer-rb_push
+완료 · 빌드 6 · 토큰 17498 · 9s → ~/.genut/products/sample/runs/20261022-161835-ring_buffer-rb_push
 ```
 
 빌드 6번(사전검증 1, 스모크 1, 확장 1, 수정 후 재검증 1, 커버리지 1, 최종 확인 1)으로 케이스 5개가 모두 통과하고 라인 커버리지 100%를 채웠습니다. 아래는 각 단계에서 실제로 생긴 산출물입니다.
@@ -1053,8 +1068,8 @@ TEST_F(RingBufferRbPushTest, test_rb_push_exact_fit) {
 Thread 1 received signal SIGSEGV, Segmentation fault.
 0x00007ff8284b8c3a in ucrtbase!memmove () from C:/Windows/System32/ucrtbase.dll
 #0  0x00007ff8284b8c3a in ucrtbase!memmove () from C:/Windows/System32/ucrtbase.dll
-#1  0x00007ff77fc535de in rb_push (rb=0x5ff7f0, data=0x7ff77fc65185 <testing::kMaxStackTraceDepth+333>, len=4) at ~/work/sample/src/ring_buffer.c:39
-#2  0x00007ff77fc5233e in RingBufferRbPushTest_test_rb_push_exact_fit_Test::TestBody (this=0x7bef00) at <build-genut>/genut-src/ring_buffer_rb_push_t…
+#1  0x00007ff665a535de in rb_push (rb=0x5ff7f0, data=0x7ff665a65185 <testing::kMaxStackTraceDepth+333>, len=4) at ~/work/sample/src/ring_buffer.c:39
+#2  0x00007ff665a5233e in RingBufferRbPushTest_test_rb_push_exact_fit_Test::TestBody (this=0x75ef10) at <build-genut>/genut-src/ring_buffer_rb_push_t…
 ```
 
 이 로그에서 GenUT가 만든 **크래시 브리프**(`crash/r2-rb_push.md`). Fixer는 원시 로그 대신 이것을 받습니다.
@@ -1086,7 +1101,8 @@ EXPECT_EQ(rb_push(&rb, "abcdef", 6), RB_OK);
 ## 실패 정보
 
 분류: assertion_failed (단계: run)
-요약: <build-genut>/genut-src/ring_buffer_rb_push_test.cc:29: Failure
+요약: 같지 않음: rb_push(&rb, "abcdef", 6) [-28] ≠ RB_OK [0]
+기대값: 0 · 실제값: -28
 실패 메시지에 나온 값: -28, 0
 상세:
 <build-genut>/genut-src/ring_buffer_rb_push_test.cc:29: Failure
@@ -1104,7 +1120,7 @@ Hint: 단정이 실패했습니다. 소스의 반환 지점·조건과 대조해
 Allowed strategies (prefer the first): fix_case, add_stub, drop_case, narrow_scope, give_up
 ```
 
-수정 기록(`fixes/r1-test_rb_push_full.md`). 기대값을 직전 실제값(-28 = `RB_ENOSPC`)으로 바꿨지만, Fixer가 소스의 반환 지점(`:34`)을 근거로 댔으므로 "실제값 베끼기" 검사를 통과합니다. 근거가 없었다면 소스 버그 의심으로 분류됩니다.
+수정 기록(`fixes/r1-test_rb_push_full.md`). Fixer는 기대값을 실제값과 같은 `RB_ENOSPC`(-28)로 바꾸면서 소스의 반환 지점(`:34`)을 근거로 댔습니다. 만약 실제값 숫자 `-28`을 기대값 자리에 그대로 옮겨 쓰고 반환 지점 근거도 없었다면, 코드가 "실제값 베끼기"로 보고 소스 버그 의심으로 분류합니다.
 
 ````markdown
 # test_rb_push_full
@@ -1119,7 +1135,8 @@ Allowed strategies (prefer the first): fix_case, add_stub, drop_case, narrow_sco
 
 ```
 분류: assertion_failed (단계: run)
-요약: <build-genut>/genut-src/ring_buffer_rb_push_test.cc:29: Failure
+요약: 같지 않음: rb_push(&rb, "abcdef", 6) [-28] ≠ RB_OK [0]
+기대값: 0 · 실제값: -28
 실패 메시지에 나온 값: -28, 0
 ```
 
@@ -1268,9 +1285,9 @@ endforeach()
 ```markdown
 # GenUT 리포트: ~/work/sample/src/ring_buffer.c
 
-- 실행: 20261022-154248-ring_buffer-rb_push
+- 실행: 20261022-161835-ring_buffer-rb_push
 - 백엔드: gtest
-- 빌드 6/30 · 소요 9.7s · 토큰 17614
+- 빌드 6/30 · 소요 9.1s · 토큰 17498
 
 ## rb_push
 
@@ -1295,21 +1312,20 @@ Note Keeper가 두 노트를 제안했고, 코드가 범위를 정했습니다. 
 
 GenUT가 쌓는 지식 노트입니다. 한 줄에 하나씩. 사람이 고쳐도 됩니다.
 
-- rb_push 테스트는 rb_init으로 초기화한 실제 버퍼를 써야 하며, 필드를 직접 채우면 memcpy에서 크래시가 난다 <!-- genut id=1ede5bad key=090bc7b1c29f cat=crash strategy=fix_case runs=20261022-154248-ring_buffer-rb_push products=sample -->
+- rb_push 테스트는 rb_init으로 초기화한 실제 버퍼를 써야 하며, 필드를 직접 채우면 memcpy에서 크래시가 난다 <!-- genut id=1ede5bad key=090bc7b1c29f cat=crash strategy=fix_case runs=20261022-161835-ring_buffer-rb_push products=sample -->
 
 ## 공통 후보
 
-- 단정 실패를 고칠 때는 분석 보고서의 반환 지점과 조건 줄을 근거로 기대값을 정하면 한 번에 고쳐진다 <!-- genut id=5df61f95 key=27ebbc16a289 cat=assertion_failed strategy=fix_case runs=20261022-154248-ring_buffer-rb_push products=sample -->
+- 단정 실패를 고칠 때는 분석 보고서의 반환 지점과 조건 줄을 근거로 기대값을 정하면 한 번에 고쳐진다 <!-- genut id=5df61f95 key=27ebbc16a289 cat=assertion_failed strategy=fix_case runs=20261022-161835-ring_buffer-rb_push products=sample -->
 ```
 
 성공한 수정은 코드가 수정 사례로도 남깁니다(`knowledge/fix_patterns.yaml`). 다음에 같은 분류의 실패가 나면 Fixer 프롬프트에 예시로 들어갑니다.
 
 ```yaml
-- key: 53b21c3430ad
+- key: b18d3f9c780f
   category: assertion_failed
-  pattern: 'c:<path>:<n>: failure'
-  message: '<build-genut>/genut-src/ring_buffer_rb_push_test.cc:29:
-    Failure'
+  pattern: '같지 않음: <sym>(&rb, <x>, <n>) [-<n>] ≠ <sym> [<n>]'
+  message: '같지 않음: rb_push(&rb, "abcdef", 6) [-28] ≠ RB_OK [0]'
   before: 'struct rb rb;
 
     unsigned char buf[4];
@@ -1327,7 +1343,7 @@ GenUT가 쌓는 지식 노트입니다. 한 줄에 하나씩. 사람이 고쳐�
 
     EXPECT_EQ(rb_used(&rb), 0u);'
   runs:
-  - 20261022-154248-ring_buffer-rb_push
+  - 20261022-161835-ring_buffer-rb_push
 ```
 
 ```text
@@ -1343,14 +1359,14 @@ $ genut knowledge list --home ~/.genut
 
 ```text
 $ genut show latest --home ~/.genut
-20261022-154248-ring_buffer-rb_push · ~/work/sample/src/ring_buffer.c · gtest · 단계 final
-빌드 6/30 · 소요 9.7s · 토큰 17614
+20261022-161835-ring_buffer-rb_push · ~/work/sample/src/ring_buffer.c · gtest · 단계 final
+빌드 6/30 · 소요 9.1s · 토큰 17498
   rb_push: complete · 통과 5 · 커버리지 100% (13/13) · 최종 확인 OK
 ```
 
 ```text
 $ genut view latest --no-open --home ~/.genut
-뷰어: ~/.genut/products/sample/runs/20261022-154248-ring_buffer-rb_push/view.html
+뷰어: ~/.genut/products/sample/runs/20261022-161835-ring_buffer-rb_push/view.html
 ```
 
 `view.html`은 의존성 없는 단일 HTML입니다. 위에서부터 요약(함수별 결과·예산), **타임라인**(단계·메시지·LLM 호출·수정·격리), **케이스 보드**(케이스별 상태 변화와 본문·마지막 실패), 프롬프트 원문, 수정 기록, 크래시 브리프, 리포트가 접힌 상태로 들어 있습니다.
@@ -1358,7 +1374,7 @@ $ genut view latest --no-open --home ~/.genut
 ### 6.11 실행 기록 디렉터리 전체
 
 ```
-~/.genut/products/sample/runs/20261022-154248-ring_buffer-rb_push/
+~/.genut/products/sample/runs/20261022-161835-ring_buffer-rb_push/
 ├── run.json                 설정 스냅샷, provider/모델, 규칙·프롬프트 해시, 결과, 예산 사용량
 ├── trace.jsonl              시간순 이벤트 (단계, 메시지, LLM 호출, 수정, 격리, 커버리지, 노트)
 ├── state.json               함수·케이스 상태 (빌드마다 갱신. 중단돼도 통과 케이스가 남음)
@@ -1380,7 +1396,7 @@ $ genut view latest --no-open --home ~/.genut
 
 ```json
 {
-  "run_id": "20261022-154248-ring_buffer-rb_push",
+  "run_id": "20261022-161835-ring_buffer-rb_push",
   "source_file": "~/work/sample/src/ring_buffer.c",
   "backend": "gtest",
   "product": "sample",
@@ -1400,8 +1416,8 @@ $ genut view latest --no-open --home ~/.genut
     "reviewer": "251f575b3920b6ab",
     "note_keeper": "96f6977bfa12b89c"
   },
-  "started": "2026-10-22T15:42:48",
-  "finished": "2026-10-22T15:42:57",
+  "started": "2026-10-22T16:18:35",
+  "finished": "2026-10-22T16:18:44",
   "stage": "final",
   "error": "",
   "interrupted": false,
@@ -1411,10 +1427,10 @@ $ genut view latest --no-open --home ~/.genut
   "budget": {
     "builds_used": 6,
     "builds_max": 30,
-    "elapsed_sec": 9.7,
+    "elapsed_sec": 9.1,
     "tokens": {
-      "rb_push": 16359,
-      "(notes)": 1255
+      "rb_push": 16286,
+      "(notes)": 1212
     },
     "iterations": 1
   },
@@ -1425,15 +1441,15 @@ $ genut view latest --no-open --home ~/.genut
 `trace.jsonl` 앞부분:
 
 ```text
-{"ts": 1792651368.063, "type": "stage_start", "stage": "analyze"}
-{"ts": 1792651368.51, "type": "message", "text": "[1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개"}
-{"ts": 1792651368.513, "type": "llm_call", "role": "analyzer", "prompt_file": "prompts/01-analyzer.md", "agent": "analyzer", "stage": "analyze", "function": "rb_push", "…
-{"ts": 1792651368.513, "type": "testability", "agent": "analyzer", "function": "rb_push", "testable": true, "reason": "", "warning": ""}
-{"ts": 1792651368.514, "type": "stage_end", "stage": "analyze", "seconds": 0.451}
-{"ts": 1792651368.514, "type": "stage_start", "stage": "stub"}
-{"ts": 1792651368.514, "type": "message", "text": "[2/8] 스텁     rb_push: 스텁 0개"}
-{"ts": 1792651368.514, "type": "stage_end", "stage": "stub", "seconds": 0.0}
-{"ts": 1792651368.515, "type": "stage_start", "stage": "preflight"}
+{"ts": 1792653515.294, "type": "stage_start", "stage": "analyze"}
+{"ts": 1792653515.703, "type": "message", "text": "[1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개"}
+{"ts": 1792653515.705, "type": "llm_call", "role": "analyzer", "prompt_file": "prompts/01-analyzer.md", "agent": "analyzer", "stage": "analyze", "function": "rb_push", "…
+{"ts": 1792653515.706, "type": "testability", "agent": "analyzer", "function": "rb_push", "testable": true, "reason": "", "warning": ""}
+{"ts": 1792653515.707, "type": "stage_end", "stage": "analyze", "seconds": 0.413}
+{"ts": 1792653515.707, "type": "stage_start", "stage": "stub"}
+{"ts": 1792653515.707, "type": "message", "text": "[2/8] 스텁     rb_push: 스텁 0개"}
+{"ts": 1792653515.707, "type": "stage_end", "stage": "stub", "seconds": 0.0}
+{"ts": 1792653515.708, "type": "stage_start", "stage": "preflight"}
 ```
 
 ---
@@ -1475,7 +1491,7 @@ $ genut gen --file ~/work/linux/drivers/foo/foo.c --func foo_clamp --product foo
 [8/8] 리뷰     foo_clamp: 지적 0건
 [노트] 0개 저장 (프로덕트 0 · 공통 후보 0 · 공통 0)
 [확인] foo_clamp: complete · 최종 확인 ok → ~/work/linux/drivers/foo/tests/foo_foo_clamp_test.c
-완료 · 빌드 6 · 토큰 10891 · 1s → ~/.genut/products/foo-driver/runs/20261022-154314-foo-foo_clamp
+완료 · 빌드 6 · 토큰 10891 · 1s → ~/.genut/products/foo-driver/runs/20261022-161901-foo-foo_clamp
 ```
 
 확장 라운드의 실행 로그(KTAP). GenUT는 우리 스위트 블록과 `EXPECTATION FAILED` 줄만 골라 Fixer에 줍니다.
@@ -1687,13 +1703,13 @@ $ genut replay latest --set budget.max_case_fixes=0 --home ~/.genut
 [7/8] 커버리지   rb_push: 라인 85% (11/13) · 미커버 :33 :34
 [확인] rb_push: partial · 최종 확인 ok → ~/work/sample/tests/generated/ring_buffer_rb_push_test.cc
 [참고] infra_error: LLM 호출 실패(작성(coverage)): 기록된 응답이 더 없습니다: test_writer. --from으로 실제 provider를 쓰세요.
-완료 · 빌드 5 · 토큰 0 · 7s → ~/.genut/products/sample/runs/20261022-154259-replay-20261022-154248-ring_buffer-rb_push
+완료 · 빌드 5 · 토큰 0 · 7s → ~/.genut/products/sample/runs/20261022-161845-replay-20261022-161835-ring_buffer-rb_push
 ```
 
 수정을 안 하니 커버리지 라운드가 기록보다 많은 케이스를 요구해 **기록된 응답이 바닥나** 멈췄습니다(`[참고]` 줄). 이럴 때는 그 단계부터 실제 LLM을 부르는 `--from`을 씁니다. 이 예시에서는 실제 LLM 대신 커버리지용 응답만 담은 다른 fake 스크립트를 줬습니다.
 
 ```text
-$ genut replay 20261022-154248-ring_buffer-rb_push --from coverage --set budget.max_case_fixes=0 --set llm.fake.script=~/demo/live_script.json --home ~/.genut
+$ genut replay 20261022-161835-ring_buffer-rb_push --from coverage --set budget.max_case_fixes=0 --set llm.fake.script=~/demo/live_script.json --home ~/.genut
 [1/8] 분석     int rb_push(struct rb *rb, const void *data, size_t len) · 호출 3개 · 스텁 필요 0개
 [2/8] 스텁     rb_push: 스텁 0개
 [3/8] 사전검증   캐시 사용 (뼈대·환경이 이전 성공과 같음, 0.9s)
@@ -1708,14 +1724,14 @@ $ genut replay 20261022-154248-ring_buffer-rb_push --from coverage --set budget.
 [7/8] 커버리지   rb_push: 라인 100% (13/13)
 [8/8] 리뷰     rb_push: 지적 0건
 [확인] rb_push: partial · 최종 확인 ok → ~/work/sample/tests/generated/ring_buffer_rb_push_test.cc
-완료 · 빌드 4 · 토큰 5049 · 6s → ~/.genut/products/sample/runs/20261022-154306-replay-20261022-154248-ring_buffer-rb_push
+완료 · 빌드 4 · 토큰 5006 · 6s → ~/.genut/products/sample/runs/20261022-161853-replay-20261022-161835-ring_buffer-rb_push
 ```
 
 원래 실행과 비교합니다.
 
 ```text
-$ genut diff 20261022-154248-ring_buffer-rb_push latest --home ~/.genut
-실행 비교: A 20261022-154248-ring_buffer-rb_push → B 20261022-154306-replay-20261022-154248-ring_buffer-rb_push
+$ genut diff 20261022-161835-ring_buffer-rb_push latest --home ~/.genut
+실행 비교: A 20261022-161835-ring_buffer-rb_push → B 20261022-161853-replay-20261022-161835-ring_buffer-rb_push
   대상: ~/work/sample/src/ring_buffer.c (gtest)
   B는 A의 replay입니다 (--from coverage부터 실제 LLM)
 
@@ -1727,7 +1743,7 @@ $ genut diff 20261022-154248-ring_buffer-rb_push latest --home ~/.genut
 결과
   함수 complete 1 → 0, partial 0 → 1
   케이스 통과 5/5 → 4/6 · 제거 0 → 2
-  빌드 6 → 4 (-2) · 토큰 17614 → 5049 (-12565) · 소요 9.7s → 6.3s (-3.4)
+  빌드 6 → 4 (-2) · 토큰 17498 → 5006 (-12492) · 소요 9.1s → 6.2s (-2.9)
   LLM 호출 8 → 5 (-3): analyzer 1, fixer 2 → 0, note_keeper 1 → 0, reviewer 1, test_writer 3
   수정한 실패 분류: assertion_failed 1 → 0, crash 1 → 0
 
@@ -1739,7 +1755,7 @@ $ genut diff 20261022-154248-ring_buffer-rb_push latest --home ~/.genut
     그대로: 3개
 ```
 
-수정 2건이 없어지자 두 케이스가 제거되어 결과가 `complete → partial`이 되었고, 커버리지는 새 케이스(`test_rb_push_too_long`)로 다시 100%가 되었습니다. 빌드는 2번, 토큰은 12565 줄었습니다. 이렇게 **입력 변화와 결과 변화를 한 화면에서** 봅니다.
+수정 2건이 없어지자 두 케이스가 제거되어 결과가 `complete → partial`이 되었고, 커버리지는 새 케이스(`test_rb_push_too_long`)로 다시 100%가 되었습니다. 빌드는 2번 줄었고, Fixer·Note Keeper 호출이 빠져 토큰도 크게 줄었습니다. 이렇게 **입력 변화와 결과 변화를 한 화면에서** 봅니다.
 
 ### 9.4 예시 2: 코퍼스로 측정하기 (eval)
 
@@ -1765,11 +1781,11 @@ $ genut eval --corpus ~/demo/corpus.toml --label rules-v1 --save-baseline --home
   케이스 빌드율          100.0%
   케이스 통과율           75.0%
   평균 라인 커버리지       100.0%
-  평균 빌드 횟수            3.5
+  평균 빌드 횟수              4
   평균 수정 라운드           0.5
-  함수당 평균 토큰        7613.5
-  평균 소요(초)              5
-리포트: ~/.genut/products/sample/evals/runs/20261022-154542-rules-v1/report.html
+  함수당 평균 토큰        7575.5
+  평균 소요(초)            5.9
+리포트: ~/.genut/products/sample/evals/runs/20261022-161902-rules-v1/report.html
 기준치 저장: ~/.genut/evals/baselines/fake-model.json
 ```
 
@@ -1784,11 +1800,11 @@ $ genut eval --corpus ~/demo/corpus.toml --label rules-v2 --home ~/.genut --prod
   케이스 빌드율          100.0%
   케이스 통과율          100.0%  (기준 75.0%, +25.0%p 개선)
   평균 라인 커버리지       100.0%
-  평균 빌드 횟수            3.5
+  평균 빌드 횟수            3.5  (기준 4, -0.5 개선)
   평균 수정 라운드             0  (기준 0.5, -0.5 개선)
-  함수당 평균 토큰        6506.5  (기준 7613.5, -1107.0 개선)
-  평균 소요(초)            4.7  (기준 5, -0.3 개선)
-리포트: ~/.genut/products/sample/evals/runs/20261022-154552-rules-v2/report.html
+  함수당 평균 토큰        6506.5  (기준 7575.5, -1069.0 개선)
+  평균 소요(초)            4.8  (기준 5.9, -1.1 개선)
+리포트: ~/.genut/products/sample/evals/runs/20261022-161914-rules-v2/report.html
 ```
 
 결과는 `products/<이름>/evals/runs/<시각>-<라벨>/`의 `results.json`, `report.md`, `report.html`에 남고, 리포트에 규칙 md 해시와 역할 프롬프트 해시가 있어 무엇이 바뀌었는지 추적할 수 있습니다. 다른 결과와 비교하려면 `--compare <results.json>`.
@@ -1829,7 +1845,7 @@ $ genut knowledge list --candidates --home ~/.genut
 |---|---|---|
 | 스텁 도구 미연동 | 정의 없는 심볼을 부르는 경로는 테스트하지 않음, static 함수는 gtest에서 테스트 불가 | `link_targets`로 실제 정의 링크, KUnit은 `static_access = "include_source"`. 스텁 도구 md를 받으면 연동 예정 |
 | KUnit을 실제 커널·QEMU로 검증하지 않음 | 계약은 가짜 스크립트로만 확인 | 첫 적용 때 `--stop-after preflight`로 빌드부터 확인 |
-| gtest 단정 실패 요약이 `파일:줄: Failure` 한 줄 | 수정 사례의 메시지 패턴이 모든 단정 실패에서 같아짐 (Fixer는 상세 메시지를 받으므로 수정에는 지장 없음) | — |
+| KUnit 단정 실패 요약이 위치 줄(`EXPECTATION FAILED at 파일:줄`) | 수정 사례의 메시지 패턴이 KUnit 단정 실패끼리 같아짐 (Fixer는 상세 메시지를 받으므로 수정에는 지장 없음) | — |
 | 노트의 "같은 노트" 판정이 문장 정규화 기반 | 표현이 다르면 자동 승격이 잘 안 됨 | `knowledge list --candidates`로 보고 직접 `promote` |
 | `genut eval`이 수정 사례·소스 버그 의심은 계속 기록 | 반복 평가 사이에 Fixer 예시가 달라질 수 있음 | 기준치 비교 시 같은 상태의 홈에서 측정 |
 | `--interactive` 없음 | 단계 사이에 사람이 편집할 수 없음 | `--stop-after` + `finalize`, `replay --from` |

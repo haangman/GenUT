@@ -59,7 +59,11 @@ def test_gen_end_to_end(tmp_path):
     assert status["test_rb_push_bad_buf"] == CaseStatus.PASS and status["test_rb_push_null"] == CaseStatus.PASS
     bad = fs.case("test_rb_push_bad_buf")
     assert "crash" in [h.status for h in bad.history] and bad.last_failure.category == "crash"
-    assert "-28" in fs.case("test_rb_push_full").last_failure.observed  # 실제 gtest가 낸 실제값
+    lf = fs.case("test_rb_push_full").last_failure
+    assert "-28" in lf.observed  # 실제 gtest가 낸 실제값
+    assert lf.summary == '같지 않음: rb_push(&rb, "abcdef", 6) [-28] ≠ RB_OK [0]' and (lf.expected, lf.actual) == ("0", "-28")
+    fix_md = next((run / "fixes").glob("*test_rb_push_full.md")).read_text(encoding="utf-8")
+    assert "요약: 같지 않음: rb_push(" in fix_md and "기대값: 0 · 실제값: -28" in fix_md  # Fixer가 받은 실패 정보
     assert fs.result == "complete" and fs.final_check == "ok"
     installed = root / "tests" / "generated" / "ring_buffer_rb_push_test.cc"
     assert installed.exists() and installed.read_text(encoding="utf-8").count("TEST_F(") == 4

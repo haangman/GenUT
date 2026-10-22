@@ -1,0 +1,176 @@
+Running main() from D:/W/B/src/googletest-1.18.0/googletest/src/gtest_main.cc
+[==========] Running 19 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 19 tests from Fmt
+[ RUN      ] Fmt.eq_both_values
+fmt_test.cc:11: Failure
+Expected equality of these values:
+  push(6)
+    Which is: -28
+  0
+
+[  FAILED  ] Fmt.eq_both_values (0 ms)
+[ RUN      ] Fmt.eq_literal
+fmt_test.cc:12: Failure
+Expected equality of these values:
+  push(6)
+    Which is: -28
+  0
+
+[  FAILED  ] Fmt.eq_literal (0 ms)
+[ RUN      ] Fmt.eq_literal_first
+fmt_test.cc:13: Failure
+Expected equality of these values:
+  0
+  push(6)
+    Which is: -28
+
+[  FAILED  ] Fmt.eq_literal_first (0 ms)
+[ RUN      ] Fmt.eq_two_calls
+fmt_test.cc:14: Failure
+Expected equality of these values:
+  push(6)
+    Which is: -28
+  push(1)
+    Which is: 0
+
+[  FAILED  ] Fmt.eq_two_calls (0 ms)
+[ RUN      ] Fmt.streq
+fmt_test.cc:15: Failure
+Expected equality of these values:
+  name(1)
+    Which is: "partial"
+  "empty"
+
+[  FAILED  ] Fmt.streq (0 ms)
+[ RUN      ] Fmt.string_eq
+fmt_test.cc:16: Failure
+Expected equality of these values:
+  std::string(name(1))
+    Which is: "partial"
+  "empty"
+
+[  FAILED  ] Fmt.string_eq (0 ms)
+[ RUN      ] Fmt.ne
+fmt_test.cc:17: Failure
+Expected: (push(1)) != (0), actual: 0 vs 0
+
+[  FAILED  ] Fmt.ne (0 ms)
+[ RUN      ] Fmt.lt
+fmt_test.cc:18: Failure
+Expected: (push(1)) < (-1), actual: 0 vs -1
+
+[  FAILED  ] Fmt.lt (0 ms)
+[ RUN      ] Fmt.ge
+fmt_test.cc:19: Failure
+Expected: (push(6)) >= (0), actual: -28 vs 0
+
+[  FAILED  ] Fmt.ge (0 ms)
+[ RUN      ] Fmt.is_true
+fmt_test.cc:20: Failure
+Value of: push(6) == 0
+  Actual: false
+Expected: true
+
+[  FAILED  ] Fmt.is_true (0 ms)
+[ RUN      ] Fmt.is_false
+fmt_test.cc:21: Failure
+Value of: push(1) == 0
+  Actual: true
+Expected: false
+
+[  FAILED  ] Fmt.is_false (0 ms)
+[ RUN      ] Fmt.near
+fmt_test.cc:22: Failure
+The difference between 1.5 and 1.0 is 0.5, which exceeds 1e-3, where
+1.5 evaluates to 1.5,
+1.0 evaluates to 1, and
+1e-3 evaluates to 0.001.
+
+[  FAILED  ] Fmt.near (0 ms)
+[ RUN      ] Fmt.float_eq
+fmt_test.cc:23: Failure
+Expected equality of these values:
+  1.5f
+    Which is: 1.5
+  1.25f
+    Which is: 1.25
+
+[  FAILED  ] Fmt.float_eq (0 ms)
+[ RUN      ] Fmt.that
+fmt_test.cc:24: Failure
+Value of: push(6)
+Expected: is equal to 0
+  Actual: -28 (of type int)
+
+[  FAILED  ] Fmt.that (0 ms)
+[ RUN      ] Fmt.fail_msg
+fmt_test.cc:25: Failure
+Failed
+rb가 초기화되지 않음
+
+[  FAILED  ] Fmt.fail_msg (0 ms)
+[ RUN      ] Fmt.with_message
+fmt_test.cc:26: Failure
+Expected equality of these values:
+  push(6)
+    Which is: -28
+  0
+용량 4에 6바이트
+
+[  FAILED  ] Fmt.with_message (0 ms)
+[ RUN      ] Fmt.two_failures
+fmt_test.cc:27: Failure
+Expected equality of these values:
+  push(6)
+    Which is: -28
+  0
+
+fmt_test.cc:27: Failure
+Expected equality of these values:
+  push(7)
+    Which is: -28
+  1
+
+[  FAILED  ] Fmt.two_failures (0 ms)
+[ RUN      ] Fmt.exception
+unknown file: Failure
+C++ exception with description "boom" thrown in the test body.
+
+[  FAILED  ] Fmt.exception (0 ms)
+[ RUN      ] Fmt.ptr_null
+fmt_test.cc:29: Failure
+Expected equality of these values:
+  p
+    Which is: 0x7ff6be78f07d
+  nullptr
+    Which is: (nullptr)
+
+[  FAILED  ] Fmt.ptr_null (0 ms)
+[----------] 19 tests from Fmt (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 19 tests from 1 test suite ran. (1 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 19 tests, listed below:
+[  FAILED  ] Fmt.eq_both_values
+[  FAILED  ] Fmt.eq_literal
+[  FAILED  ] Fmt.eq_literal_first
+[  FAILED  ] Fmt.eq_two_calls
+[  FAILED  ] Fmt.streq
+[  FAILED  ] Fmt.string_eq
+[  FAILED  ] Fmt.ne
+[  FAILED  ] Fmt.lt
+[  FAILED  ] Fmt.ge
+[  FAILED  ] Fmt.is_true
+[  FAILED  ] Fmt.is_false
+[  FAILED  ] Fmt.near
+[  FAILED  ] Fmt.float_eq
+[  FAILED  ] Fmt.that
+[  FAILED  ] Fmt.fail_msg
+[  FAILED  ] Fmt.with_message
+[  FAILED  ] Fmt.two_failures
+[  FAILED  ] Fmt.exception
+[  FAILED  ] Fmt.ptr_null
+
+19 FAILED TESTS
