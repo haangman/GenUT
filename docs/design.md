@@ -2,8 +2,8 @@
 
 > 이 문서는 GenUT(Generate Unit Tests)의 설계를 설명합니다. C 코드나 테스트 도구를 잘 모르는 사람도 흐름을 이해할 수 있도록 썼고, 구현자가 그대로 따라 만들 수 있을 만큼 구체적으로 적었습니다. 코드 구현은 이 문서를 함께 검토하고 합의한 뒤에 시작합니다.
 
-**문서 버전**: 0.9 (초안, 2026-10-22)
-**그림**: HTML 판(`docs/design.html`)에는 시스템 구성도, 흐름도, 에이전트 협업도, 검증 깔때기, 케이스 상태 머신, 로그 축약 파이프라인, 커버리지 루프, 공통/프로덕트 저장소, 에이전트 호출 시점·역할 카드 그림 9장이 들어 있습니다.
+**문서 버전**: 0.10 (초안, 2026-10-22)
+**그림**: HTML 판(`docs/design.html`)에는 시스템 구성도, 흐름도, 에이전트 협업도, 검증 깔때기, 케이스 상태 머신, 로그 축약 파이프라인, 커버리지 루프, 공통/프로덕트 저장소, 에이전트 호출 시점·역할 카드, 프롬프트 조립기 그림 10장이 들어 있습니다.
 **상태**: 검토 중
 
 ---
@@ -480,6 +480,7 @@ Diagnostic:
 | `timeout` | 실행 시간 초과 | `drop_case` | 무한 루프/대기 가능성. 1회만 `fix_case` 시도 |
 | `crash` | 세그폴트, oops, KASAN 등 (8장) | `fix_case` 1회 → `drop_case` | 크래시 브리프 기반 |
 | `infra_error` | 스크립트 실패, 도구 없음, preflight 실패 | 종료 | 사람에게 안내 |
+| `context_overflow` | 필수 조각만으로도 프롬프트가 한도 초과 (9.7) | `narrow_scope` | LLM 호출 없음. 범위를 줄이고 규칙 md 길이를 사람에게 안내 |
 
 분류 규칙은 `classify.yaml`에 두어 패턴을 코드 수정 없이 추가할 수 있습니다.
 
@@ -743,7 +744,7 @@ Gemma 4가 둘 다 지원하므로 1번이 기본이지만, 2번 경로도 FakeP
 
 | 항목 | 설계 |
 |---|---|
-| 컨텍스트 | 호출당 입력을 보통 8k 토큰 이내로 유지. 분석 보고서·로그는 예산 안에서 축약 |
+| 컨텍스트 | 호출당 입력을 보통 8k 토큰 이내로 유지. 분석 보고서·로그는 예산 안에서 축약하고, 보내기 직전에 전체를 재서 한도를 넘지 않게 한다 (9.7) |
 | 프롬프트 캐싱 | 없다고 가정. 시스템 프롬프트를 짧게 |
 | 지시 따르기 | 역할당 지시 10개 이내. 출력은 스키마로 강제 |
 | 추론 | 분류·판정은 코드가 미리 해 준다. LLM은 "이 분류의 실패를 고치는" 좁은 일만 |
@@ -763,7 +764,35 @@ api_key_env = "GENUT_LLM_KEY"
 max_context = 32768
 ```
 
-바꾼 뒤 `genut doctor`로 연결과 능력(스키마 출력 지원 여부)을 확인하고, `genut eval`로 성공률을 Claude 기준치와 비교합니다.
+바꾼 뒤 `genut doctor`로 연결과 능력(스키마 출력 지원 여부, 토큰 추정 보정)을 확인하고, `genut eval`로 성공률을 Claude 기준치와 비교합니다.
+
+### 9.7 컨텍스트 한도 관리 (`llm/prompt_builder.py`)
+
+조각별 예산(분석 보고서 3,000, 축약 로그 4,000, 지식 1,500 토큰)만으로는 부족합니다. 규칙 md, 스텁 도구 md, 통과한 케이스 전체 소스, 구조체 정의, 과거 수정 사례가 한 프롬프트에 모이는 Fixer 호출은 조각마다 예산을 지켜도 **합이 한도를 넘을 수 있습니다**. Gemma 4가 32k로 서빙될 때 입력이 넘치면 서버는 오류를 내거나 앞부분을 조용히 잘라 버립니다. 앞부분이 잘리면 시스템 프롬프트의 규칙이 사라져 결과가 엉뚱해지는데 원인을 찾기 어렵습니다. 또 테스트 파일 전체 재작성은 출력이 수천 토큰이라, 입력이 한도에 딱 맞으면 응답이 중간에 끊깁니다.
+
+그래서 **모든 에이전트 호출은 프롬프트 조립기를 거칩니다.** 에이전트는 프롬프트 문자열을 만들지 않고 **조각 목록**을 냅니다. 조각마다 우선순위와 축약 방법이 붙어 있습니다.
+
+| 우선순위 | 조각 | 넘칠 때 |
+|---|---|---|
+| 1 필수 | 역할 지시문, 규칙 md(공통+프로덕트), 출력 스키마, 대상 함수 시그니처와 타입 정의 | 줄이지 않음 |
+| 2 축약 가능 | 분석 보고서 | 관련 구조체·열거형만 남김 |
+| 2 축약 가능 | 통과 케이스 소스 | 이름과 시그니처만 남기고 "보존하라"는 지시로 대체 |
+| 2 축약 가능 | 축약 로그, 크래시 브리프 | 로그 상한을 절반으로 낮춰 다시 축약 (8.2의 우선순위 유지) |
+| 2 축약 가능 | 지식 노트, 수정 사례(`fix_patterns`) | 상위 N개만 (N을 줄임) |
+| 2 축약 가능 | 스텁 도구 md | 사용법 핵심 절만 (md에 표시된 `<!-- genut:core -->` 구간) |
+| 3 생략 가능 | 예시, 참고 코드 조각, 과거 시도 요약 | 통째로 제거 |
+
+조립 절차:
+
+1. 조각을 모두 넣고 `count_tokens`로 전체를 셉니다.
+2. 허용량 = `max_context` − `output_reserve_tokens` − 안전 여유(`context_safety_margin`). 예: 32,768 − 6,000 − 5% ≈ 24,400.
+3. 넘치면 3번 조각을 하나씩 빼고, 그래도 넘치면 2번 조각을 우선순위 역순으로 하나씩 축약하며 매번 다시 셉니다.
+4. 1번 조각만으로도 넘치면 **LLM을 부르지 않고** `context_overflow` 실패로 기록합니다. 오케스트레이터는 `narrow_scope`로 넘어가고, 리포트에 "규칙 md 길이를 줄이라"는 안내를 남깁니다.
+5. 어떤 조각이 얼마나 잘렸는지 `trace.jsonl`에 기록하고 `genut view`의 호출 카드에 표시합니다. 규칙 md가 길어 매번 다른 조각이 잘리는 상황을 여기서 잡습니다.
+
+토큰 세기: Gemma 4 토크나이저를 로컬에 둘 수 없는 환경을 고려해 기본은 **보수적 추정**입니다(영문 4자당 1토큰, 한글은 글자당 1.5토큰, 코드는 3자당 1토큰). `genut doctor`가 실제 API 응답의 `usage`와 추정치를 비교해 보정 계수를 `config.toml`에 기록하고, 이후 추정에 곱합니다. 추정치는 항상 실제보다 크게 잡습니다. Anthropic provider는 토큰 세기 API를 그대로 씁니다.
+
+이렇게 하면 9.5의 "호출당 8k 이내"가 원칙이 아니라 코드가 보장하는 성질이 됩니다. Claude로 개발할 때는 한도가 커서 티가 나지 않지만 Gemma 4로 바꾸는 순간 가장 먼저 부딪히는 문제이므로 2단계(LLM 계층)에 함께 구현합니다.
 
 ---
 
@@ -1037,6 +1066,12 @@ max_context = 32768
 supports_json_schema = true
 supports_n = false
 
+[llm.context]                     # 9.7 프롬프트 조립기
+output_reserve_tokens = 6000      # 응답 자리로 비워 두는 토큰
+context_safety_margin = 0.05      # 추정 오차 여유 (비율)
+token_counter = "estimate"        # "estimate" | "api" (Anthropic은 api)
+estimate_calibration = 1.0        # genut doctor 가 실제 usage 와 비교해 갱신
+
 [budget]                          # 기본값. 프로덕트 설정에서 덮어쓸 수 있음
 candidates = 1                    # 후보 수 (Gemma 권장 3)
 parallel_candidates = false
@@ -1051,6 +1086,8 @@ slow_build_threshold_sec = 120    # 사전검증이 이보다 느리면 스모�
 log_token_budget = 4000           # 축약 로그 상한
 analysis_token_budget = 3000      # 분석 보고서 상한
 knowledge_token_budget = 1500     # 공통 지식 + 프로덕트 지식 합계 상한
+passed_cases_token_budget = 4000  # 통과 케이스 소스 상한. 넘으면 이름·시그니처만
+fix_examples_token_budget = 1500  # 과거 수정 사례 상한
 
 [coverage]
 enabled = true
@@ -1122,7 +1159,7 @@ candidates = 3
 | # | 단계 | 산출물 | 검증 |
 |---|---|---|---|
 | 1 | 스켈레톤 | pyproject, 패키지, config(`$GENUT_HOME`/프로덕트 겹침 해석), CLI(`init`,`doctor`,`gen`,`show`,`product`), trace, budget, state | 설정 겹침 우선순위·프로덕트 자동 탐지·CLI 파싱·trace 기록 단위 테스트 |
-| 2 | LLM 계층 | provider 인터페이스, Fake/Anthropic/OpenAI-compat, `structured.py` | 스키마 출력 native/폴백/복구 경로를 FakeProvider로 테스트 |
+| 2 | LLM 계층 | provider 인터페이스, Fake/Anthropic/OpenAI-compat, `structured.py`, 프롬프트 조립기(`prompt_builder.py`)와 토큰 추정 | 스키마 출력 native/폴백/복구 경로를 FakeProvider로 테스트. `max_context`를 작게 둔 FakeProvider로 축약 순서, 필수 조각 보존, `context_overflow` 테스트 |
 | 3 | 분석기 | compile_db, flag_sanitizer, parser, extractor, linkscope, summarizer | c_samples 픽스처로 추출 결과 테스트, 실제 커널 플래그 샘플로 정제 테스트 |
 | 4 | 검증 기반 | diagnostics, classify, staged(의미 검사), reduce | gcc/clang 출력 샘플로 파싱·분류 테스트, 축약 상한 준수 테스트 |
 | 5 | 규칙·에이전트 | rules, Agent base, Analyzer, Test Writer | FakeProvider로 전 과정 |
@@ -1134,7 +1171,7 @@ candidates = 3
 | 11 | 스텁 어댑터 | 백엔드별 `stub_adapter.py` (셋업 시 제공되는 md 기반) | 스텁 포함 e2e |
 | 12 | C++ 인스턴스 멤버 함수 | 생성자·멤버 상태 추출, gtest fixture 생성 | C++ 샘플 e2e |
 | 13 | 지식 노트 | Note Keeper, 범위 검증 규칙, 공통 후보→자동 승격, `knowledge` 명령, fix_patterns | 프로덕트 식별자 포함 노트가 공통으로 가지 않는지, 두 프로덕트 동일 노트 승격, 다른 프로덕트 지식 미로드 테스트 |
-| 14 | Gemma 4 튜닝 | 프롬프트·N·예산 조정 | eval 비교 |
+| 14 | Gemma 4 튜닝 | 프롬프트·N·예산 조정, 토큰 추정 보정 계수 확인 | eval 비교, 잘린 조각 통계 |
 
 ### 13.2 자체 테스트 전략
 
@@ -1178,3 +1215,4 @@ candidates = 3
 | 11 | 동시 실행 | 순차 실행. 병렬은 하지 않는다 | 11.1 |
 | 12 | 언어 | 리포트·뷰어·doctor 메시지·코드 주석 모두 한국어. 커밋 메시지는 CLAUDE.md에 따라 영어 | CLAUDE.md |
 | 13 | 여러 프로덕트 운영 | 공통 정보는 `$GENUT_HOME`, 프로덕트 정보는 `$GENUT_HOME/products/<이름>/`에 분리 저장. 프로덕트 소스 트리에는 테스트 파일 외에 아무것도 쓰지 않는다. 읽을 때 공통→프로덕트 순으로 겹치고, 쓸 때는 범위 규칙과 Note Keeper 검증으로 섞이지 않게 한다 | 1장 원칙, 5.2, 10.1, 11.5, 12장, 13장 1·13단계 |
+| 14 | 컨텍스트 한도 관리 | 모든 LLM 호출은 프롬프트 조립기를 거쳐 보내기 직전에 전체 토큰을 세고, 한도를 넘으면 우선순위가 낮은 조각부터 축약·생략한다. 필수 조각만으로도 넘치면 `context_overflow`로 호출하지 않는다. 토큰은 보수적으로 추정하고 `genut doctor`가 보정한다 | 7.3, 9.5, 9.7, 12장, 13장 2단계 |
