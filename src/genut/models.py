@@ -66,6 +66,7 @@ class FailureInfo(BaseModel):
     diagnostics: list[Diagnostic] = Field(default_factory=list)
     expected: str | None = None
     actual: str | None = None
+    observed: list[str] = Field(default_factory=list)  # 실패 메시지에 나온 값들 (실제값 베끼기 검출용)
     crash: CrashBrief | None = None
     recommended_strategy: str = "fix_case"
     review_check: str | None = None
@@ -79,5 +80,7 @@ class CaseResult(BaseModel):
     message: str = ""
     expected: str | None = None
     actual: str | None = None
+    observed: list[str] = Field(default_factory=list)
+    details: str = ""
     file: str = ""
     line: int = 0

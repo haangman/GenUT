@@ -1,0 +1,44 @@
+# 실패 분류 규칙 (설계 7.3). 위에서부터 처음 맞는 규칙을 쓴다. 코드 수정 없이 패턴을 추가할 수 있다.
+# stage: check(의미 검사) | compile | link
+# match: 진단 메시지에 포함되면 맞음 (대소문자 무시). flag: 경고 플래그 접두어
+diagnostic_rules:
+  - category: warning_as_error
+    flag: ["Werror"]
+    strategy: fix_case
+    hint: "경고가 오류로 처리되었습니다. 경고를 끄지 말고 코드를 고치세요 (미사용 변수는 지우거나 단정에 쓰고, 부호 비교는 같은 부호 타입으로 맞추기)."
+  - category: duplicate_symbol
+    stage: [link]
+    match: ["multiple definition", "duplicate symbol"]
+    strategy: add_stub
+    hint: "스텁이 실제 정의와 충돌합니다. 스텁 도구의 심볼 교체 방식이 필요합니다."
+  - category: undefined_reference
+    stage: [link]
+    match: ["undefined reference", "undefined symbol", "unresolved external", "undefined!"]
+    strategy: add_stub
+    hint: "정의 없는 심볼을 호출합니다. 스텁 도구로 이 심볼의 스텁을 추가하세요."
+  - category: missing_include
+    match: ["file not found", "no such file or directory", "unknown type name", "implicit declaration of function", "call to undeclared function", "incomplete type", "has incomplete type", "storage size of"]
+    strategy: fix_case
+    hint: "선언이 보이지 않습니다. 공유 영역 include 목록에 있는 헤더만 쓰고, 분석 보고서의 타입·함수 이름을 정확히 쓰세요."
+  - category: undeclared_identifier
+    match: ["undeclared identifier", "was not declared in this scope", "undeclared (first use in this function)", "use of undeclared", "no member named", "has no member named"]
+    strategy: fix_case
+    hint: "없는 이름을 썼습니다. 분석 보고서의 상수·필드·함수 이름 중에서 고르세요."
+  - category: type_mismatch
+    match: ["incompatible", "too many arguments", "too few arguments", "cannot convert", "invalid conversion", "no matching function", "passing argument", "makes pointer from integer", "makes integer from pointer", "invalid operands", "cannot initialize", "assigning to"]
+    strategy: fix_case
+    hint: "타입이 맞지 않습니다. 분석 보고서의 정확한 시그니처와 타입 정의를 따르세요."
+  - category: compile_error
+    match: [""]
+    strategy: fix_case
+    hint: "컴파일 오류입니다. 진단 메시지와 소스 줄을 보고 그 케이스만 고치세요."
+
+# 실행 결과 분류의 권장 시작 전략
+run_rules:
+  assertion_failed: {strategy: fix_case, hint: "단정이 실패했습니다. 소스의 반환 지점·조건과 대조해 기대값이 틀렸는지 소스가 틀렸는지 판단하세요. 기대값을 실제값으로 그냥 바꾸면 거부됩니다."}
+  crash: {strategy: fix_case, hint: "실행 중 크래시가 났습니다. 크래시 브리프의 책임 위치와 가설을 보고 입력·초기화·스텁 반환값을 고치세요."}
+  timeout: {strategy: drop_case, hint: "실행 시간이 초과되었습니다. 무한 루프나 대기가 없는지 확인하세요."}
+  review_reject: {strategy: fix_case, hint: "리뷰 검사에 걸렸습니다. 지적된 항목을 고치세요."}
+  context_overflow: {strategy: narrow_scope, hint: "필수 프롬프트만으로 컨텍스트 한도를 넘었습니다."}
+  infra_error: {strategy: give_up, hint: "환경 문제입니다. 사람이 고쳐야 합니다."}
+  header_not_cpp_clean: {strategy: give_up, hint: "대상 헤더가 C++로 컴파일되지 않습니다."}
