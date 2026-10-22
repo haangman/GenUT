@@ -1032,7 +1032,7 @@ $GENUT_HOME/products/<이름>/runs/20261022-143012-rb_push/
     ├── ring_buffer_rb_push_test.c   # 함수별 테스트 파일
     ├── ring_buffer_kunit.c          # (KUnit) 집합 파일
     ├── stubs/
-    └── report.md        # 함수별 complete/partial/none, 최종 확인 결과
+    └── report.md        # 함수별 complete/partial/none, 최종 확인 결과, 이번 실행이 남긴 지식 노트
 ```
 
 ### 11.3 HTML 뷰어 (`genut view`)
@@ -1157,6 +1157,15 @@ $GENUT_HOME/products/<이름>/
    - 공통: "KUnit에서 `kunit_kzalloc` 결과를 구조체 포인터 필드에 넣지 않으면 null_deref가 난다 (runs: alpha/…, beta/…)"
    - 프로덕트: "`drivers/foo/foo.c`의 `foo_init`은 `foo_hw_reset` 스텁이 0을 반환해야 정상 경로로 간다 (run: 20261022-…)"
 
+#### Note Keeper 호출과 코드 검증
+
+- **부르는 때**: 실행이 끝나고 최종 확인 뒤, **배울 것이 있는 실행**에만 부른다. 수정이 있었거나, 실패했던·제외·의심·불안정 케이스, 범위 축소, 미커버 줄 분류 중 하나라도 있는 실행이다. 모든 케이스가 첫 시도에 통과했거나 테스트 불가 판정만 있으면 부르지 않는다. `--dry-run`, `--stop-after`, 중단된 실행, 그리고 지식 축적이 측정·재현을 흔들지 않도록 `genut eval`과 `replay`에서도 부르지 않는다. 끄려면 `[knowledge] note_keeper = false`
+- **입력**: 함수별 실행 요약(결과·커버리지, 첫 시도에 통과한 케이스, 실패 분류와 요약, 적용한 전략과 이유, 고치기 전후 본문, 제외 사유, 미커버 줄 분류)과 이미 있는 노트. 한도를 넘으면 고치기 전후 본문부터 뺀다. 토큰은 함수별 예산과 따로 `(notes)`로 센다
+- **코드 검증**: 근거(evidence)가 이번 실행의 함수·케이스를 가리키지 않거나, 300자를 넘거나, 같은 문장이면 버린다. 실패 분류가 이번 실행에 없던 것이면 비우고, 전략은 전략 사다리 안의 것만 남긴다. 실행당 `max_notes_per_run`(기본 5)개까지
+- **규칙 1의 판정 재료**: (a) 분석한 함수의 이름·클래스·namespace와, 호출·전역·타입·상수 중 프로덕트 루트 아래에 선언된 것. 선언 위치를 모르면 프로덕트로 본다. KUnit은 커널 트리의 `include/`·`arch/`를 공용 API로 보고 뺀다. (b) 대상 파일 이름. (c) `product.toml`의 `[product]`·`[gtest]`·`[kunit]` 문자열 값과 경로의 파일 이름. 백엔드 이름 같은 선택지와 `*_pattern`은 뺀다. (d) 노트에 나온 경로 중 프로덕트 루트 아래에 실제로 있는 것. 한국어 조사가 바로 붙으므로(`foo.c를`) 경계는 ASCII 문자로만 판단한다
+- **저장과 기록**: 프로덕트 노트와 공통 후보는 `product.md`(후보는 `## 공통 후보` 절), 공통 노트는 `global.md`에 한 줄씩 둔다. id·정규화 키·분류·전략·실행·프로덕트는 줄 끝 HTML 주석에 둔다. 이미 공통인 노트가 다시 나오면 후보를 만들지 않고 공통 노트에 근거만 더한다. 결과는 `trace.jsonl`(`note_saved`, `note_rejected`)과 `final/report.md`의 "지식 노트" 절(강등·승격 이유 포함)에 남는다
+- **프롬프트에 넣을 때**: 공통 → 이 프로덕트(공통 후보 포함, 이미 공통이 된 것은 뺌) 순으로, 묶음 안에서는 여러 실행에서 확인된 노트와 최근 노트부터 `knowledge_token_budget` 안에서 넣는다. 수정 사례는 같은 메시지 패턴(따옴표 안·숫자·식별자를 자리표시자로 바꾼 오류 메시지) → 프로덕트 사례 → 많이 쓰인 사례 순으로 `fix_examples_token_budget` 안에서 Fixer에 넣는다
+
 #### 다음 생성에 들어가는 것과 기록으로만 남는 것
 
 두 저장소의 내용이 모두 생성 프롬프트에 들어가는 것은 아닙니다. 생성 품질에 영향을 주는 "학습된 정보"는 지식 노트, 실패 패턴 수정 사례, 플래그 학습 목록, 소스 버그 의심 목록 네 가지이며, 범위 검증 규칙은 이 중 에이전트가 쓰는 앞의 두 가지에 적용됩니다.
@@ -1180,9 +1189,9 @@ $GENUT_HOME/products/<이름>/
 | 명령 | 하는 일 |
 |---|---|
 | `genut product add <이름> --root <경로>` / `list` / `remove` | 프로덕트 등록·목록·해제 |
-| `genut knowledge list [--scope global\|product]` | 노트 목록과 근거 |
-| `genut knowledge promote <id>` / `demote <id>` | 범위 변경 |
-| `genut knowledge edit [--scope …]` | 편집기로 열기 |
+| `genut knowledge list [--scope global\|product] [--candidates]` | 노트 목록과 근거. `--candidates`는 이 프로덕트의 공통 후보를 실패 분류별로 묶고 같은 노트가 있는 프로덕트를 붙인다(다른 프로덕트 노트의 내용은 보여 주지 않음) |
+| `genut knowledge promote <id> [--force]` / `demote <id>` | 범위 변경. 프로덕트 경로·설정값이 든 노트는 `--force` 없이 올리지 않는다 |
+| `genut knowledge edit [--scope …]` | `$VISUAL`·`$EDITOR`(없으면 Windows는 notepad, 그 밖은 vi)로 열기. 기본은 프로덕트 지식 |
 | `genut doctor` | 공통/프로덕트 설정 겹침 결과와 실제로 로드되는 규칙·지식·스텁 md 파일 목록을 보여 줌 |
 
 ---
@@ -1248,6 +1257,8 @@ install_unverified = false        # 최종 확인을 못 한 통과 케이스도
 
 [knowledge]
 auto_promote_after_products = 2   # 같은 노트가 몇 개 프로덕트에서 나오면 공통으로 승격
+note_keeper = true                # 실행이 끝나면 Note Keeper로 지식 노트를 남김 (eval·replay에서는 항상 끔)
+max_notes_per_run = 5             # 실행 하나가 남기는 노트 상한
 ```
 
 ```toml

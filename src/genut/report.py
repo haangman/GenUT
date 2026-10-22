@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from genut.state import CaseStatus, FunctionState, FunctionStatus, RunState
+from genut.state import CaseStatus, FunctionState, FunctionStatus, RunState, SavedNote
 
 LABEL = {
     CaseStatus.PASS: "통과",
@@ -87,9 +87,24 @@ def render_report(state: RunState, budget: dict | None = None) -> str:
         for n in fn.review_notes:
             lines.append(f"- 리뷰: {n}")
         lines.append("")
+    if state.knowledge_notes:
+        lines += ["## 지식 노트", ""] + [f"- {note_line(n)}" for n in state.knowledge_notes] + [""]
     if state.notes:
         lines += ["## 참고", ""] + [f"- {n}" for n in state.notes] + [""]
     return "\n".join(lines)
+
+
+NOTE_SCOPE = {"product": "프로덕트", "candidate": "공통 후보", "global": "공통"}
+
+
+def note_line(n: SavedNote) -> str:
+    """이번 실행이 남긴 노트 한 줄: 저장 범위와, 제안과 달라진 이유."""
+    why = ""
+    if n.proposed == "global" and n.scope == "product":
+        why = f" — 프로덕트 고유 정보 때문에 프로덕트로: {', '.join(n.matched)}"
+    elif n.promoted:
+        why = " — 다른 프로덕트에도 있어 공통으로 승격"
+    return f"[{NOTE_SCOPE.get(n.scope, n.scope)}] {n.text} (id {n.id}){why}"
 
 
 def render_summary(run_path: Path) -> str:

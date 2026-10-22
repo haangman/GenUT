@@ -23,6 +23,7 @@ from pathlib import Path
 from genut.agents.analyzer import Analyzer, UnreachableAnalyzer
 from genut.agents.base import AgentEnv, AgentError
 from genut.agents.fixer import Fixer, apply_fix, failure_text, give_up
+from genut.agents.note_keeper import FixRecord, NoteKeeper, has_lessons
 from genut.agents.reviewer import Reviewer
 from genut.agents.test_writer import TestWriter
 from genut.analysis.extractor import analyze_file
@@ -36,14 +37,25 @@ from genut.budget import Budget
 from genut.context import AppContext
 from genut.coverage import function_coverage, reach_conditions, render_uncovered
 from genut.finalize import final_check
-from genut.knowledge import KnowledgeStore
+from genut.knowledge import KnowledgeStore, ProductFacts, function_identifiers
 from genut.llm.factory import make_counter, make_provider
 from genut.llm.fake_provider import FakeProvider
 from genut.llm.provider import ChatProvider
 from genut.models import CaseResult, FailureInfo
 from genut.report import classify_result, render_report
 from genut.rules import load_rules
-from genut.state import CaseStatus, CoverageSummary, FunctionState, FunctionStatus, RunState, Snapshot, TestCase, UnreachableLine, text_hash
+from genut.state import (
+    CaseStatus,
+    CoverageSummary,
+    FunctionState,
+    FunctionStatus,
+    RunState,
+    SavedNote,
+    Snapshot,
+    TestCase,
+    UnreachableLine,
+    text_hash,
+)
 from genut.trace import RunDir, Trace
 from genut.verify.classify import Classifier, allowed_strategies
 from genut.verify.review import justified, review_case
@@ -78,6 +90,7 @@ class GenOptions:
     dry_run: bool = False  # LLM·빌드 없이 프롬프트만 만들어 기록 (11.4)
     stop_after: str = ""  # 이 단계 뒤에 멈춤. 최종 확인·설치는 하지 않는다 (genut finalize로 이어 갈 수 있음)
     install: bool = True  # False면 최종 확인까지 하되 프로덕트 트리에 쓰지 않는다 (genut eval)
+    notes: bool = True  # False면 Note Keeper를 부르지 않는다 (genut eval·replay: 지식이 측정·재현을 흔들지 않게)
 
 
 def cpp_blocker(fn, stub: str = "noop") -> str:  # noqa: ANN001 - FunctionInfo
@@ -133,6 +146,8 @@ class Orchestrator:
         self.error = ""
         self.classifier = Classifier()
         self.meta: dict[str, object] = {}  # run.json에 덧붙일 것 (replay 출처 등)
+        self.fix_log: list[FixRecord] = []  # Note Keeper 입력
+        self._product_facts: ProductFacts | None = None
 
     # ============================================================== 실행
     def run(self) -> RunState:
@@ -173,6 +188,7 @@ class Orchestrator:
         self.analyzer, self.writer, self.fixer = Analyzer(self.env), TestWriter(self.env), Fixer(self.env)
         self.unreachable = UnreachableAnalyzer(self.env)
         self.reviewer = Reviewer(self.env)
+        self.note_keeper = NoteKeeper(self.env)
         self.started = datetime.now()
         self._write_run_json()
 
@@ -610,7 +626,8 @@ class Orchestrator:
             self._fail(c, FailureInfo(category="review_reject", stage="review", summary=f.detail, review_check=f.check, recommended_strategy="fix_case"), stage)
             return
         if c.previous_body and c.last_failure is not None:  # 성공한 수정은 다음 실행의 예시가 된다 (11.5)
-            self.knowledge.add_fix_example(c.last_failure.category, c.last_failure.summary, c.previous_body, c.body, self.state.run_id, self._identifiers(u))
+            self.knowledge.add_fix_example(c.last_failure.category, c.last_failure.summary, c.previous_body, c.body, self.state.run_id, self._facts(),
+                                           function_identifiers(u.report.function))
         c.pass_body_hash = c.body_hash()
         c.pass_shared_version = fs.shared.version
         c.flaky_suspect = False
@@ -727,8 +744,9 @@ class Orchestrator:
         if c.status == CaseStatus.SUSPECTED_BUG:
             self.knowledge.add_suspected_bug(fs.name, c.name, c.drop_reason, text_hash(u.report.function.source), self.state.run_id)
         self.rundir.write_text(f"fixes/r{self.budget.iterations}-{c.name}.md", self._fix_record(c, fi, recommended, allowed, out, outcome))
-        self.trace.event("fix", function=fs.name, case=c.name, category=fi.category, recommended=recommended, chosen=out.strategy,
-                         applied=outcome.strategy, retest=outcome.retest, notes=outcome.notes)
+        self.fix_log.append(FixRecord(fs.name, c.name, fi.category, fi.summary[:200], outcome.strategy, out.reason[:200]))
+        self.trace.event("fix", function=fs.name, case=c.name, category=fi.category, summary=fi.summary[:200], recommended=recommended,
+                         chosen=out.strategy, applied=outcome.strategy, reason=out.reason[:200], retest=outcome.retest, notes=outcome.notes)
         return f"{outcome.strategy}({c.name})" + (" → 재검증" if outcome.retest else "")
 
     @staticmethod
@@ -749,10 +767,46 @@ class Orchestrator:
             u.state.narrowed.append(f"{where}: context_overflow — 규칙 md 길이를 줄이세요")
         self._note(f"{u.function} {where}: {e.kind} — {e}")
 
-    def _identifiers(self, u: TestUnit) -> set[str]:
-        fn = u.report.function
-        ids = {fn.name, *(c.name for c in fn.calls), *fn.constants, *(t.name.split()[-1] for t in fn.types), *(g.name for g in fn.globals)}
-        return {i for i in ids if len(i) > 2}
+    def _facts(self) -> ProductFacts:
+        """범위 검증(11.5 규칙 1)에 쓰는 프로덕트 고유 정보: 분석한 함수들의 프로덕트 심볼, 대상 파일 이름, product.toml 값, 루트 경로.
+        KUnit이면 커널 트리의 include·arch는 공용 API로 보고 프로덕트 경로에서 뺀다."""
+        if self._product_facts is None:
+            p = self.ctx.product
+            facts = ProductFacts.for_product(p.root, p.product_toml, self.cfg.kunit.kernel_src if self.cfg.backend == "kunit" else None) if p else ProductFacts()
+            facts.identifiers.add(self.source.name)
+            for u in self.units:
+                facts.identifiers |= function_identifiers(u.report.function, facts.root, facts.shared)
+            self._product_facts = facts
+        return self._product_facts
+
+    def _keep_notes(self) -> None:
+        """실행이 끝나면 Note Keeper가 다음 생성에 도움이 될 사실을 노트로 남긴다 (11.5). 범위는 코드가 정한다.
+        배울 것이 없는 실행, dry-run·stop-after·중단, eval·replay(notes=False)에서는 부르지 않는다."""
+        k = self.cfg.knowledge
+        if (not k.note_keeper or not self.opts.notes or self.opts.dry_run or self.stopped_after or self.state.interrupted
+                or self.ctx.product is None or not has_lessons(self.state, self.fix_log)):
+            return
+        self.state.stage = self.env.stage = "notes"
+        displays = {u.function: u.report.function.display for u in self.units}
+        existing = self.knowledge.prompt_block(self.cfg.budget.knowledge_token_budget, self.env.counter)
+        try:
+            res = self.note_keeper.propose(self.state, displays, self.fix_log, existing)
+        except AgentError as e:
+            self.trace.event("agent_error", function=NoteKeeper.budget_key, where="note_keeper", kind=e.kind, message=str(e))
+            self._note(f"지식 노트를 남기지 못했습니다: {e.kind} — {e}")
+            return
+        facts = self._facts()
+        for p in res.accepted:
+            n = self.knowledge.add_note(p.text, p.scope, self.state.run_id, facts, k.auto_promote_after_products, p.category, p.strategy)
+            saved = SavedNote(id=n.id, text=n.text, proposed=p.scope, scope=n.scope, category=p.category, strategy=p.strategy,
+                              evidence=p.evidence, matched=n.matched, promoted=n.promoted)
+            self.state.knowledge_notes.append(saved)
+            self.trace.event("note_saved", **saved.model_dump())
+        for p, why in res.rejected:
+            self.trace.event("note_rejected", text=p.text, scope=p.scope, reason=why)
+        scopes = [n.scope for n in self.state.knowledge_notes]
+        self.trace.say(f"[노트] {len(scopes)}개 저장 (프로덕트 {scopes.count('product')} · 공통 후보 {scopes.count('candidate')} · 공통 {scopes.count('global')})"
+                       + (f" · 버림 {len(res.rejected)}" if res.rejected else ""))
 
     def _save(self) -> None:
         self.state.seconds_used = round(self.budget.elapsed(), 3)
@@ -807,6 +861,10 @@ class Orchestrator:
             self._backend_finish()
             for fs in self.state.functions.values():
                 fs.result = classify_result(fs, self.cfg.coverage.target_line_percent)
+            try:
+                self._keep_notes()
+            except Exception as e:  # noqa: BLE001 - 노트를 못 남겨도 마무리는 계속한다
+                self._note(f"지식 노트 저장 중 오류: {e!r}")
             self.state.finished = not self.stopped_after
             self._save()
             self.rundir.write_text("final/report.md", render_report(self.state, self._budget_summary()))

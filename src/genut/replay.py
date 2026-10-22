@@ -91,7 +91,7 @@ def replay_run(
         from genut.llm.factory import make_provider
 
         live = make_provider(ctx.config)
-    orch = Orchestrator(ctx, Path(state.source_file), GenOptions(functions=list(state.functions)), backend=backend, echo=echo,
+    orch = Orchestrator(ctx, Path(state.source_file), GenOptions(functions=list(state.functions), notes=False), backend=backend, echo=echo,
                         label=f"replay-{state.run_id}")
     orch.provider = ReplayProvider(recorded_responses(run_path), live, live_from, stage_of=lambda: getattr(getattr(orch, "env", None), "stage", ""))
     orch.meta = {"replay_of": state.run_id, "replay_live_from": live_from}

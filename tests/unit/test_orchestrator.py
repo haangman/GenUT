@@ -292,7 +292,9 @@ def test_replay_reuses_recorded_responses(world):
     ctx = make_context(world.home, "sample")
     world.be.installed.clear()
     again = replay_run(ctx, orch.rundir.path, backend=world.be)
-    assert isinstance(again.provider, ReplayProvider) and again.provider.served == len(p.calls)
+    tags = [c["tag"] for c in p.calls]
+    assert tags[-1] == "note_keeper"  # replay는 지식 노트를 남기지 않으므로 Note Keeper 응답은 다시 쓰지 않는다
+    assert isinstance(again.provider, ReplayProvider) and again.provider.served == len(tags) - 1
     assert statuses(again.state) == statuses(first) and again.state.functions["rb_push"].tokens_used == 0
     assert json.loads((again.rundir.path / "run.json").read_text(encoding="utf-8"))["replay_of"] == orch.rundir.run_id
 

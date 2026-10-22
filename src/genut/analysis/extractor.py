@@ -345,6 +345,7 @@ class _Extractor:
             info.constants[name] = text or "(매크로)"
             if d is not None and d.location.file is not None:
                 headers.append(d.location.file.name)
+                info.constant_files[name] = d.location.file.name
         return headers
 
     def _types(self, cur, info: FunctionInfo) -> None:  # noqa: ANN001
@@ -389,6 +390,7 @@ class _Extractor:
             for c in definition.get_children():
                 if c.kind == K.ENUM_CONSTANT_DECL:
                     info.constants.setdefault(c.spelling, str(c.enum_value))
+                    info.constant_files.setdefault(c.spelling, td.file)
         else:
             fields = [c for c in definition.get_children() if c.kind == K.FIELD_DECL]
             td.fields = [f"{f.type.spelling} {f.spelling}" for f in fields[: self.max_fields]]
@@ -615,6 +617,8 @@ class _BodyWalker:
             return
         if ref.kind == K.ENUM_CONSTANT_DECL:
             self.info.constants.setdefault(ref.spelling, str(ref.enum_value))
+            if ref.location.file is not None:
+                self.info.constant_files.setdefault(ref.spelling, ref.location.file.name)
             return
         if ref.kind != K.VAR_DECL:
             return

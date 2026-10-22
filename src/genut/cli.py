@@ -111,6 +111,122 @@ def product_remove(
     typer.echo(f"해제: {name}" + (" (프로덕트 폴더 삭제)" if delete_data else ""))
 
 
+# -------------------------------------------------------------- knowledge
+ScopeOpt = Annotated[Optional[str], typer.Option("--scope", help="global | product (생략하면 둘 다)")]
+
+
+def _knowledge(home: Path | None, product: str | None, need_product: bool = False):  # noqa: ANN202 - (ctx, KnowledgeStore)
+    from genut.knowledge import KnowledgeStore
+
+    try:
+        ctx = make_context(_home(home), product, require_product=need_product)
+    except (ProductError, ValueError) as e:
+        _fail(str(e))
+    p = ctx.product
+    return ctx, KnowledgeStore(ctx.home, p.dir if p else None, p.name if p else "")
+
+
+def _note_line(n) -> str:  # noqa: ANN001 - Note
+    tags = " ".join(t for t in (f"[{n.category}]" if n.category else "", f"전략 {n.strategy}" if n.strategy else "") if t)
+    runs = f" (실행 {len(n.runs)}회" + (f", 프로덕트 {', '.join(n.products)}" if n.scope == "global" and n.products else "") + ")"
+    return f"  {n.id}  {n.text}" + (f"  {tags}" if tags else "") + runs
+
+
+@knowledge_app.command("list")
+def knowledge_list(
+    scope: ScopeOpt = None,
+    candidates: Annotated[bool, typer.Option("--candidates", help="이 프로덕트의 공통 후보를 실패 분류별로 묶어 보여 준다")] = False,
+    home: HomeOpt = None,
+    product: ProductOpt = None,
+) -> None:
+    """지식 노트 목록과 근거. 다른 프로덕트의 노트는 보여 주지 않는다 (후보 집계에만 쓴다)."""
+    if scope not in (None, "global", "product"):
+        _fail("--scope는 global 또는 product여야 합니다.")
+    ctx, ks = _knowledge(home, product, need_product=candidates or scope == "product")
+    if candidates:
+        groups = ks.candidate_groups()
+        if not groups:
+            typer.echo("공통 후보가 없습니다.")
+        for cat, items in groups.items():
+            typer.echo(f"[{cat or '분류 없음'}]")
+            for n, products in items:
+                typer.echo(_note_line(n) + f"  · 같은 노트가 있는 프로덕트 {len(products)}개: {', '.join(products)}")
+        typer.echo(f"승격 기준: 프로덕트 {ctx.config.knowledge.auto_promote_after_products}개. 직접 올리려면 genut knowledge promote <id>")
+        return
+    sections = []
+    if scope in (None, "global"):
+        sections.append(("공통 지식", ks.notes("global")))
+    if scope in (None, "product") and ks.product_dir is not None:
+        sections += [(f"프로덕트 지식: {ks.product_name}", ks.notes("product")), ("공통 후보", ks.notes("candidate"))]
+    for title, notes in sections:
+        typer.echo(f"{title} ({len(notes)})")
+        for n in notes:
+            typer.echo(_note_line(n))
+
+
+@knowledge_app.command("promote")
+def knowledge_promote(
+    note_id: Annotated[str, typer.Argument(help="노트 id (genut knowledge list)")],
+    force: Annotated[bool, typer.Option("--force", help="프로덕트 고유 정보가 들어 있어도 올린다")] = False,
+    home: HomeOpt = None,
+    product: ProductOpt = None,
+) -> None:
+    """이 프로덕트의 노트(또는 공통 후보)를 공통 지식으로 올린다."""
+    from genut.knowledge import ProductFacts
+
+    ctx, ks = _knowledge(home, product, need_product=True)
+    n = ks.find(note_id)
+    if n is None or n.scope == "global":
+        _fail(f"이 프로덕트에서 올릴 노트를 찾지 못했습니다: {note_id}", 1)
+    p = ctx.product
+    facts = ProductFacts.for_product(p.root, p.product_toml, ctx.config.kunit.kernel_src if ctx.config.backend == "kunit" else None)
+    found = facts.mentions(n.text)
+    if found and not force:
+        _fail(f"프로덕트 고유 정보가 들어 있어 공통으로 올리지 않습니다: {', '.join(found)} (그래도 올리려면 --force)", 1)
+    ks.promote(note_id)
+    typer.echo(f"공통으로 올림: {note_id} {n.text}")
+
+
+@knowledge_app.command("demote")
+def knowledge_demote(
+    note_id: Annotated[str, typer.Argument(help="노트 id (genut knowledge list)")],
+    home: HomeOpt = None,
+    product: ProductOpt = None,
+) -> None:
+    """공통 노트를 이 프로덕트의 노트로 내린다."""
+    _, ks = _knowledge(home, product, need_product=True)
+    try:
+        n = ks.demote(note_id)
+    except KeyError:
+        _fail(f"공통 노트를 찾지 못했습니다: {note_id}", 1)
+    typer.echo(f"프로덕트({ks.product_name})로 내림: {note_id} {n.text}")
+
+
+@knowledge_app.command("edit")
+def knowledge_edit(scope: ScopeOpt = None, home: HomeOpt = None, product: ProductOpt = None) -> None:
+    """노트 파일을 편집기($VISUAL, $EDITOR)로 연다. 기본은 프로덕트 지식, --scope global이면 공통 지식."""
+    if scope not in (None, "global", "product"):
+        _fail("--scope는 global 또는 product여야 합니다.")
+    _, ks = _knowledge(home, product, need_product=scope != "global")
+    path = ks.ensure_file(scope or "product")
+    typer.echo(f"편집: {path}")
+    open_editor(path)
+
+
+def open_editor(path: Path) -> None:
+    """$VISUAL, $EDITOR 순으로 고른 편집기로 연다. 없으면 Windows는 notepad, 그 밖은 vi."""
+    import os
+    import shlex
+    import subprocess
+
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or ("notepad" if os.name == "nt" else "vi")
+    try:
+        argv = [t.strip('"') for t in shlex.split(editor, posix=os.name != "nt")]  # Windows: "C:\Program Files\..." 따옴표를 벗긴다
+        subprocess.call([*argv, str(path)])
+    except OSError as e:
+        _fail(f"편집기를 열지 못했습니다({editor}): {e}. 파일을 직접 여세요: {path}", 1)
+
+
 # ----------------------------------------------------------------- doctor
 @app.command()
 def doctor(home: HomeOpt = None, product: ProductOpt = None, set_: SetOpt = None) -> None:

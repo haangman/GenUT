@@ -196,6 +196,20 @@ class Snapshot(BaseModel):
     cases: list[str]
 
 
+class SavedNote(BaseModel):
+    """이번 실행에서 Note Keeper가 남긴 지식 노트 (설계 11.5)."""
+
+    id: str
+    text: str
+    proposed: str  # Note Keeper가 제안한 범위: global | product
+    scope: str  # 실제로 저장된 범위: product | candidate | global
+    category: str = ""
+    strategy: str = ""
+    evidence: str = ""
+    matched: list[str] = Field(default_factory=list)  # 프로덕트로 강등시킨 식별자·경로
+    promoted: bool = False  # 다른 프로덕트에도 같은 노트가 있어 공통으로 승격됨
+
+
 class RunState(BaseModel):
     run_id: str
     source_file: str
@@ -215,6 +229,7 @@ class RunState(BaseModel):
     preflight_seconds: float | None = None
     smoke_skipped: bool = False
     notes: list[str] = Field(default_factory=list)
+    knowledge_notes: list[SavedNote] = Field(default_factory=list)
 
     def all_cases(self) -> list[TestCase]:
         return [c for f in self.functions.values() for c in f.cases]

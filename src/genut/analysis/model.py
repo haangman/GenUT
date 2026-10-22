@@ -103,6 +103,7 @@ class FunctionInfo(BaseModel):
     branches: list[Branch] = Field(default_factory=list)
     types: list[TypeDef] = Field(default_factory=list)
     constants: dict[str, str] = Field(default_factory=dict)  # 열거형 상수·매크로 이름 -> 값/정의
+    constant_files: dict[str, str] = Field(default_factory=dict)  # 상수 이름 -> 선언한 파일 (지식 노트 범위 판정, 설계 11.5)
     includes: list[str] = Field(default_factory=list)  # #include 줄
     preproc: list[str] = Field(default_factory=list)  # 함수가 놓인 #if 조건
     only_asm: bool = False

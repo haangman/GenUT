@@ -95,6 +95,8 @@ class FinalizeConfig(_M):
 
 class KnowledgeConfig(_M):
     auto_promote_after_products: int = 2
+    note_keeper: bool = True  # 실행이 끝나면 Note Keeper로 지식 노트를 남긴다 (11.5)
+    max_notes_per_run: int = 5
 
 
 class AnalysisConfig(_M):

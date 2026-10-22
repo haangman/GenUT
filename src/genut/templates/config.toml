@@ -41,3 +41,5 @@ target_line_percent = 100
 
 [knowledge]
 auto_promote_after_products = 2
+# note_keeper = true             # 실행이 끝나면 Note Keeper가 다음 생성에 도움이 될 노트를 남긴다
+# max_notes_per_run = 5

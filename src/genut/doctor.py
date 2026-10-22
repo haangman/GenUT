@@ -187,8 +187,9 @@ def collect_checks(ctx: AppContext) -> list[Check]:
     checks.append(Check("ok", "로드되는 규칙", ", ".join(str(f) for f in rules.files) or "(없음)"))
     from genut.knowledge import KnowledgeStore
 
-    ks = KnowledgeStore(ctx.home, p.dir)
-    checks.append(Check("ok", "로드되는 지식", f"공통 {len(ks.notes('global'))}개 · 프로덕트 {len(ks.notes('product'))}개"))
+    ks = KnowledgeStore(ctx.home, p.dir, p.name)
+    checks.append(Check("ok", "로드되는 지식", f"공통 {len(ks.notes('global'))}개 · 프로덕트 {len(ks.notes('product'))}개 · 공통 후보 {len(ks.notes('candidate'))}개"
+                        + f" ({ks.global_md}, {ks.product_md})"))
     if ctx.config.backend == "gtest":
         checks += _gtest_checks(ctx, p.root)
     else:

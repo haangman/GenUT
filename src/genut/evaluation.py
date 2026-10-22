@@ -179,7 +179,7 @@ def run_eval(
         if not source.is_file():
             results.append(ItemResult(file=item.file, function=item.function, error=f"파일이 없습니다: {source}"))
             continue
-        opts = GenOptions(functions=[item.function] if item.function else [], install=False)
+        opts = GenOptions(functions=[item.function] if item.function else [], install=False, notes=False)
         orch = Orchestrator(ctx, source, opts, provider=provider, backend=backend_factory() if backend_factory else None,
                             label=f"eval-{source.stem}" + (f"-{item.function}" if item.function else ""))
         st = orch.run()

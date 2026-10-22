@@ -18,7 +18,7 @@ from genut.agents.base import Agent, AgentError, core_section, fit
 from genut.agents.test_writer import Helper, helpers_text, identifier
 from genut.analysis.model import AnalysisReport
 from genut.analysis.summarizer import report_fragments
-from genut.knowledge import KnowledgeStore
+from genut.knowledge import KnowledgeStore, function_identifiers
 from genut.llm.prompt_builder import OPTIONAL, REQUIRED, SHRINKABLE, Fragment
 from genut.llm.provider import Usage
 from genut.llm.structured import FencedSpec
@@ -99,7 +99,9 @@ class Fixer(Agent[FixerOutput]):
         if case.previous_body:
             frags.append(Fragment("previous", case.previous_body, OPTIONAL, title="직전 본문 (이 본문에서 고친 결과가 위 실패)"))
         if knowledge is not None:
-            ex = knowledge.fix_examples(fi.category, limit=3)
+            ex = knowledge.fix_examples(fi.category, fi.summary, limit=3, identifiers=function_identifiers(fn))
+            while len(ex) > 1 and counter(_examples(ex)) > cfg.budget.fix_examples_token_budget:
+                ex = ex[:-1]
             if ex:
                 frags.append(Fragment("fix_examples", _examples(ex), SHRINKABLE, title="같은 분류의 과거 수정 사례",
                                       shrinkers=[lambda: _examples(ex[:1]), lambda: ""]))

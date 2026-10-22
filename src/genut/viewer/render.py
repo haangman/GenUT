@@ -12,6 +12,7 @@ import html
 import json
 from pathlib import Path
 
+from genut.report import note_line
 from genut.state import RunState
 
 STATUS_CLASS = {"pass": "ok", "new": "info", "not_run": "info", "fail": "bad", "crash": "bad", "dropped": "muted", "suspected_bug": "warn", "flaky": "warn"}
@@ -74,6 +75,8 @@ def _summary(state: RunState | None, meta: dict) -> str:
             rows.append(f"<tr><td><b>{_e(fs.name)}</b><div class='muted'>{_e(fs.signature)}</div></td><td class='{cls}'>{_e(res)}</td>"
                         f"<td>{_e(fs.final_check or '-')}</td><td>{cnt}</td><td>{_e(fs.status.value)} {_e(fs.status_reason)}</td></tr>")
         out += "<h2>함수</h2><table><tr><th>함수</th><th>결과</th><th>최종 확인</th><th>케이스</th><th>상태</th></tr>" + "".join(rows) + "</table>"
+        if state.knowledge_notes:
+            out += "<h2>지식 노트</h2><ul>" + "".join(f"<li>{_e(note_line(n))}</li>" for n in state.knowledge_notes) + "</ul>"
         if state.notes:
             out += "<h2>참고</h2><ul>" + "".join(f"<li>{_e(n)}</li>" for n in state.notes) + "</ul>"
     return out
