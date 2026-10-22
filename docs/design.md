@@ -601,9 +601,9 @@ Fixer가 고를 수 있는 전략은 다섯 가지이고, 올라갈수록 "덜 �
 
 | | gtest | KUnit |
 |---|---|---|
-| 수집 방법 | GenUT 전용 빌드 디렉터리(7.5)를 `--coverage`(gcc) 또는 `-fprofile-instr-generate -fcoverage-mapping`(clang)으로 구성해 대상 소스까지 계측, 실행 후 gcov/llvm-cov로 lcov 형식 생성 | 커널에 `CONFIG_GCOV_KERNEL=y`, 대상 파일에 `GCOV_PROFILE_<obj> := y` (사용자가 준비). 실행 스크립트가 게스트의 `/sys/kernel/debug/gcov`에서 데이터를 꺼내 lcov 형식 `coverage.info`로 `--coverage-out`에 저장 |
-| GenUT가 읽는 것 | lcov 트레이스파일(`SF:`, `DA:`, `BRDA:` 줄) | 같음 |
-| 계산 범위 | 대상 함수의 줄 범위(분석 단계에서 확정)만 | 같음 |
+| 수집 방법 | GenUT 전용 빌드 디렉터리(7.5)를 `--coverage`(gcc) 또는 `-fprofile-instr-generate -fcoverage-mapping`(clang)으로 구성해 대상 소스까지 계측. 측정은 빌드 없이 **통과 케이스만** `--gtest_filter`로 한 번 더 실행해서 한다(실패 케이스가 밟은 줄은 세지 않음). gcov는 이전 `.gcda`를 지우고 실행한 뒤 `gcov --json-format`을, llvm-cov는 profraw를 합쳐 `llvm-cov export -format=lcov`를 읽고, 실행 기록에 lcov 형식으로도 남긴다. gcov는 컴파일러와 같은 디렉터리·접두어의 것을 쓴다(버전이 맞아야 함) | 커널에 `CONFIG_GCOV_KERNEL=y`, 대상 파일에 `GCOV_PROFILE_<obj> := y` (사용자가 준비). 실행 스크립트가 게스트의 `/sys/kernel/debug/gcov`에서 데이터를 꺼내 lcov 형식 `coverage.info`로 `--coverage-out`에 저장 |
+| GenUT가 읽는 것 | gcov JSON 또는 lcov 트레이스파일(`SF:`, `DA:` 줄) | lcov 트레이스파일 |
+| 계산 범위 | 대상 함수의 줄 범위(분석 단계에서 확정) 안의 실행 가능한 줄만. 리포트의 커버리지는 최종 확인을 마친 설치본으로 다시 잰 값이다 | 같음 |
 
 **커버리지 확장 단계(⑦)의 동작**
 

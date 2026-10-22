@@ -20,6 +20,10 @@ Write exactly one test case: the simplest normal-path call of `$function` that c
 Add new test cases. First cover every item under "커버리지 최소" in the rules, then the recommended cases in "Analyzer 의견" that no existing case covers. Do not duplicate passing or dropped cases.
 Existing case names (do not reuse): $existing
 
+## coverage
+Write new test cases that execute the lines listed under "미커버 줄과 도달 조건". For each item, code gives the condition and the related parameters, calls and stub return values; choose concrete inputs that make the condition true or false as stated. Every case must still check the result with a meaningful assertion; a case that only runs lines is rejected. Do not repeat existing cases.
+Existing case names (do not reuse): $existing
+
 ## example.gtest
 Example body for a different function, `int sum(const int *v, size_t n)`:
 

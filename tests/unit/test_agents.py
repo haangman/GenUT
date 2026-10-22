@@ -77,7 +77,7 @@ def _events(trace, type_):
 # ------------------------------------------------------------------ prompts
 def test_prompt_template_defaults_and_override(tmp_path):
     en = load_prompt("test_writer", "en")
-    assert set(en.sections) == {"smoke", "expand", "example.gtest", "example.kunit"}
+    assert set(en.sections) == {"smoke", "expand", "coverage", "example.gtest", "example.kunit"}
     assert "Test Writer" in en.preamble and en.sources == ["genut:prompts/en/test_writer.md"]
     assert "Test Writer입니다" in load_prompt("test_writer", "ko").preamble
     assert set(load_prompt("analyzer", "ko").sections) == {"task"}

@@ -15,6 +15,7 @@ from typing import Protocol
 from genut.analysis.compile_db import CompileDB
 from genut.analysis.model import AnalysisReport
 from genut.backends.stub import StubArtifacts
+from genut.coverage import FileCoverage
 from genut.models import CaseResult, CrashBrief, Diagnostic
 from genut.state import LIVE, FunctionState, TestCase
 from genut.verify.diagnostics import LineMap
@@ -122,6 +123,8 @@ class Backend(Protocol):
     def build(self, rendered: list[Rendered], out_dir: Path | None = None) -> BuildResult: ...
 
     def run(self, r: Rendered, out_dir: Path | None = None, only: list[str] | None = None) -> RunResult: ...
+
+    def coverage(self, r: Rendered, cases: list[str], out_dir: Path | None = None) -> FileCoverage | None: ...
 
     def install(self, r: Rendered) -> Path: ...
 

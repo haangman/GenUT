@@ -309,3 +309,43 @@ def test_viewer_renders_run(world):
     assert "test_rb_push_full" in page and "rb_push(&amp;rb, &quot;abcdef&quot;, 6)" in page and "<script" not in page
     assert "prompts/01-analyzer.md" in page and "수정 기록" in page
     assert write_view(orch.rundir.path).name == "view.html"
+
+
+# ------------------------------------------------------------- ⑦ 커버리지
+LINES = [26, 30, 31, 32, 33, 34, 36, 37, 38, 39, 40, 41, 42]
+COV_SMOKE = cases(("test_rb_push_ok", OK + " // COVERS=30,32,36,37,39,40,41,42"))
+COV_EXPAND = cases(("test_rb_push_null", NULL + " // COVERS=30,31"))
+
+
+def test_coverage_round_reaches_target(world):
+    world.be.executable_lines, world.be.entry_lines = LINES, {26}
+    more = cases(("test_rb_push_full", FULL_OK + " // COVERS=32,33,34"), ("test_rb_push_nomem", OK + " // COVERS=36,37,38"))
+    st, orch, p = run(world, {"test_writer": [COV_SMOKE, COV_EXPAND, more]})
+    fs = st.functions["rb_push"]
+    assert fs.coverage.percent == 100.0 and fs.result == "complete" and fs.unreachable == []
+    full = fs.case("test_rb_push_full")
+    assert full.origin == "coverage" and full.covers_lines == [33, 34, 38] and full.status == CaseStatus.PASS
+    prompt = [c for c in p.calls if c["tag"] == "test_writer"][-1]["messages"][1].content
+    assert "미커버 :33-34" in prompt and "(rb_free_space(rb) < len) 참" in prompt and "(slot == NULL) 참" in prompt
+    assert world.be.coverage_calls[0] == ["test_rb_push_ok", "test_rb_push_null"]  # 통과 케이스만으로 잰다
+    assert len(world.be.builds) == 5  # 사전검증 + 스모크 + 확장 + 커버리지 라운드 + 최종 확인
+    assert [e["uncovered"] for e in events(orch, "coverage")][:2] == [[33, 34, 38], []]
+
+
+def test_remaining_uncovered_lines_are_classified(world):
+    world.be.executable_lines, world.be.entry_lines = LINES, {26}
+    st, orch, p = run(world, {
+        "test_writer": [COV_SMOKE, COV_EXPAND, cases(("test_rb_push_full", FULL_OK + " // COVERS=32,33,34"))],
+        "unreachable": [{"lines": [{"line": 38, "category": "needs_stub_behavior", "reason": "rb_alloc_slot이 NULL을 돌려줘야 한다"}]}],
+    }, overrides=["budget.max_coverage_rounds=1"])
+    fs = st.functions["rb_push"]
+    assert fs.coverage.uncovered_lines == [38] and fs.result == "partial"
+    assert [(u.line, u.category) for u in fs.unreachable] == [(38, "needs_stub_behavior")]
+    assert ":38 needs_stub_behavior" in (orch.rundir.path / "final" / "report.md").read_text(encoding="utf-8")
+    assert [c["tag"] for c in p.calls].count("test_writer") == 3
+
+
+def test_coverage_disabled_skips_measurement(world):
+    world.be.executable_lines = LINES
+    st, *_ = run(world, {"test_writer": [SMOKE]}, overrides=["coverage.enabled=false"])
+    assert world.be.coverage_calls == [] and st.functions["rb_push"].coverage is None

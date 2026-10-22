@@ -90,3 +90,21 @@ def test_show_without_runs(tmp_path):
     r = runner.invoke(app, ["show", "latest", "--home", str(home), "--product", "g"])
     assert r.exit_code == 2
     assert "실행 기록" in r.output
+
+
+def test_doctor_checks_coverage_tools(tmp_path, monkeypatch):
+    from genut import doctor
+    from genut.doctor import collect_checks
+
+    src = tmp_path / "s"
+    src.mkdir()
+    add_product(tmp_path / "h", "g", src)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
+    ctx = make_context(tmp_path / "h", "g", overrides=["coverage.tool=llvm-cov"])
+    cov = next(c for c in collect_checks(ctx) if c.title == "커버리지 도구")
+    assert cov.status == "warn" and "llvm-profdata, llvm-cov" in cov.detail
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"/usr/bin/{name}")
+    cov = next(c for c in collect_checks(make_context(tmp_path / "h", "g")) if c.title == "커버리지 도구")
+    assert cov.status == "ok" and cov.detail == "/usr/bin/gcov"
+    off = make_context(tmp_path / "h", "g", overrides=["coverage.enabled=false"])
+    assert not [c for c in collect_checks(off) if c.title == "커버리지 도구"]

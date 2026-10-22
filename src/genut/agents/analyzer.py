@@ -15,8 +15,8 @@ from pydantic import BaseModel
 from genut.agents.base import Agent, AgentError, fit
 from genut.analysis.model import AnalysisReport, FunctionInfo
 from genut.analysis.summarizer import report_fragments
-from genut.llm.prompt_builder import Fragment
-from genut.state import FunctionState, FunctionStatus
+from genut.llm.prompt_builder import REQUIRED, SHRINKABLE, Fragment
+from genut.state import FunctionState, FunctionStatus, UnreachableLine
 
 
 class RecommendedCase(BaseModel):
@@ -87,3 +87,42 @@ class Analyzer(Agent[AnalyzerOutput]):
             fs.status_reason = verdict.reason
         self._event("testability", fn.name, testable=verdict.testable, reason=verdict.reason, warning=verdict.warning)
         return verdict
+
+
+# ------------------------------------------------------------- 도달 불가 분류
+class UnreachableItem(BaseModel):
+    line: int
+    category: Literal["unreachable_defensive", "needs_stub_behavior", "config_dependent", "optimized_out", "unknown"]
+    reason: str
+
+
+class UnreachableOutput(BaseModel):
+    lines: list[UnreachableItem]
+
+
+class UnreachableAnalyzer(Agent[UnreachableOutput]):
+    """커버리지 라운드를 거쳐도 남은 미커버 줄을 사유별로 분류한다 (설계 7.6). Analyzer의 두 번째 일."""
+
+    role = "unreachable"
+    output = UnreachableOutput
+
+    def classify(self, report: AnalysisReport, fs: FunctionState, uncovered: str, lines: list[int], stub_usage: str = "") -> list[UnreachableLine]:
+        values = self.values(report.function.name)
+        frags = self.base_fragments(values)
+        frags += fit(report_fragments(report), self.env.config.budget.analysis_token_budget, self.env.counter)
+        frags.append(Fragment("uncovered", uncovered, REQUIRED, title="미커버 줄과 도달 조건"))
+        if stub_usage.strip():
+            frags.append(Fragment("stub_usage", stub_usage.strip(), SHRINKABLE, title="스텁 상황", shrinkers=[lambda: ""]))
+        frags.append(self.task_fragment("task", values))
+        try:
+            res = self.call(frags, function=fs.name)
+        except AgentError as e:
+            fs.tokens_used += e.usage.total
+            raise
+        fs.tokens_used += res.usage.total
+        by_line = {i.line: i for i in res.value.lines}
+        return [
+            UnreachableLine(line=ln, category=by_line[ln].category, reason=by_line[ln].reason.strip()) if ln in by_line
+            else UnreachableLine(line=ln, category="unknown", reason="Analyzer가 분류하지 않았습니다")
+            for ln in lines
+        ]

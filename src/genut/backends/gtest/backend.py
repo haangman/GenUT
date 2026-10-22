@@ -46,6 +46,7 @@ from genut.backends.gtest.cmake_runner import (
     unit_key,
 )
 from genut.config import GenutConfig
+from genut.coverage import FileCoverage, find_file, parse_gcov_json, parse_lcov, to_lcov
 from genut.models import CaseResult, CrashBrief, Diagnostic
 from genut.state import text_hash
 from genut.verify.diagnostics import attribute, parse_compiler_output
@@ -321,6 +322,63 @@ class GTestBackend:
             brief = CrashBrief(category=cat, suspect_case=running or "", hypothesis=HYPOTHESES.get(cat, HYPOTHESES["unknown"]),
                                raw_excerpt=f"종료 코드 {code}")
         return brief, extra
+
+    # ----------------------------------------------------------- coverage
+    def coverage(self, r: Rendered, cases: list[str], out_dir: Path | None = None) -> FileCoverage | None:
+        """통과 케이스만 다시 실행해 대상 소스의 줄 실행 횟수를 얻는다 (설계 7.6). 빌드는 하지 않는다.
+
+        실패 케이스가 밟은 줄은 세지 않는다(그 케이스는 버려질 수 있다). gcov는 .gcda를 지우고 실행한 뒤
+        gcov JSON을, llvm-cov는 profraw를 합쳐 lcov로 내보내 읽는다. 기록용 lcov를 out_dir에 남긴다.
+        """
+        cov = self.cfg.coverage
+        exe = self._exe(target_name(r.file_name))
+        if not cov.enabled or not cases or r.source is None or not exe.exists():
+            return None
+        work = (out_dir or self.build_dir / "genut-run") / f"cov-{r.function}"
+        work.mkdir(parents=True, exist_ok=True)
+        cmd = [str(exe), "--gtest_color=no", "--gtest_filter=" + ":".join(f"{r.suite}.{c}" for c in cases)]
+        files: dict[str, FileCoverage] = {}
+        if cov.tool == "gcov":
+            for p in self.build_dir.rglob("*.gcda"):
+                p.unlink(missing_ok=True)
+            self.runner(cmd, cwd=work, timeout=self.cfg.gtest.test_timeout_sec)
+            gcov = self._sibling_tool(r.source, "gcov")
+            for gcda in self.build_dir.rglob(f"{r.source.name}.gcda"):
+                g = self.runner([gcov, "--json-format", "--stdout", gcda.name], cwd=gcda.parent, timeout=120)
+                start = g.output.find("{")
+                if g.returncode != 0 or start < 0:
+                    continue
+                try:
+                    data, _ = json.JSONDecoder().raw_decode(g.output[start:])  # 뒤에 붙은 stderr 경고는 버린다
+                except ValueError:
+                    continue
+                for key, fc in parse_gcov_json(data).items():
+                    files.setdefault(key, FileCoverage(fc.path)).merge(fc)
+        else:
+            for p in work.glob("*.profraw"):
+                p.unlink()
+            self.runner(cmd, cwd=work, timeout=self.cfg.gtest.test_timeout_sec, env={**os.environ, "LLVM_PROFILE_FILE": str(work / "cov-%p.profraw")})
+            raws = sorted(str(p) for p in work.glob("*.profraw"))
+            if not raws:
+                return None
+            prof = work / "merged.profdata"
+            self.runner([self._sibling_tool(r.source, "llvm-profdata"), "merge", "-sparse", *raws, "-o", str(prof)], timeout=120)
+            e = self.runner([self._sibling_tool(r.source, "llvm-cov"), "export", "-format=lcov", f"-instr-profile={prof}", str(exe)], timeout=120)
+            files = parse_lcov(e.output) if e.returncode == 0 else {}
+        if out_dir is not None and files:
+            self._log(out_dir, f"{r.function}.coverage.info", to_lcov(files))
+        return find_file(files, r.source)
+
+    def _sibling_tool(self, source: Path, tool: str) -> str:
+        """컴파일러와 짝이 맞는 도구 (gcov는 gcc 버전과 맞아야 한다): cc → gcov, x86_64-linux-gnu-gcc → x86_64-linux-gnu-gcov."""
+        db = self.compile_db()
+        entry = db.find(source) if db else None
+        if entry is not None and entry.compiler:
+            comp = Path(shutil.which(entry.compiler) or entry.compiler)
+            name = re.sub(r"(?:gcc|cc|g\+\+|c\+\+|clang|clang\+\+)(-[\d.]+)?(\.exe)?$", lambda m: tool + (m.group(1) or "") + (m.group(2) or ""), comp.name)
+            if name != comp.name and (comp.parent / name).exists():
+                return str(comp.parent / name)
+        return shutil.which(tool) or tool
 
     # ------------------------------------------------------------ install
     def install(self, r: Rendered) -> Path:

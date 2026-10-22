@@ -7,6 +7,7 @@
 - TIMEOUT: 시간 초과                - FLAKY: 첫 실행만 통과
 - FAILS_IN_FINAL: 최종 확인 실행에서만 실패
 - USES_HELPER: 파일에 BREAKS_OTHERS가 있으면 실패 (공유 영역 회귀)
+- COVERS=33,34: 통과하면 그 줄을 실행한 것으로 친다. executable_lines를 정한 시나리오에서만 커버리지를 돌려준다
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from genut.analysis.compile_db import CompileDB
 from genut.analysis.linkscope import GTestLinkContext
 from genut.backends.base import BuildResult, CommandResult, PreflightResult, Rendered, RunResult, TestUnit
 from genut.backends.gtest import skeleton
+from genut.coverage import FileCoverage
 from genut.models import CaseResult, CrashBrief, Diagnostic
 from genut.verify.staged import CheckResult
 
@@ -40,6 +42,9 @@ class MarkerBackend:
         self.builds: list[list[str]] = []  # 빌드마다 (함수, 케이스 목록) 기록
         self.runs: list[tuple[str, list[str]]] = []
         self.installed: dict[str, str] = {}
+        self.executable_lines: list[int] | None = None  # 커버리지를 돌려줄 때 대상 함수의 실행 가능한 줄
+        self.entry_lines: set[int] = set()  # 대상 함수를 부르기만 하면 실행되는 줄
+        self.coverage_calls: list[list[str]] = []
         self._flaky: dict[str, int] = {}
 
     def configure(self, units) -> CommandResult:  # noqa: ANN001
@@ -111,6 +116,18 @@ class MarkerBackend:
             else:
                 results[n] = CaseResult(name=n, status="pass")
         return RunResult(r.function, results, 0 if crash is None else -11, 0.1, crash)
+
+    def coverage(self, r: Rendered, cases: list[str], out_dir=None) -> FileCoverage | None:  # noqa: ANN001
+        if self.executable_lines is None:
+            return None
+        self.coverage_calls.append(list(cases))
+        bodies = case_bodies(r)
+        hit = set(self.entry_lines)
+        for n in cases:
+            m = re.search(r"COVERS=([\d,]+)", bodies.get(n, ""))
+            if m:
+                hit |= {int(x) for x in m.group(1).split(",") if x}
+        return FileCoverage(path=str(r.source), lines={ln: int(ln in hit) for ln in self.executable_lines})
 
     def install(self, r: Rendered) -> Path:
         p = self.install_root / r.file_name

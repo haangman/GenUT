@@ -20,12 +20,12 @@ from genut.agents.base import Agent, AgentError, core_section, fit
 from genut.analysis.model import AnalysisReport
 from genut.analysis.summarizer import report_fragments
 from genut.knowledge import KnowledgeStore
-from genut.llm.prompt_builder import OPTIONAL, SHRINKABLE, Fragment
+from genut.llm.prompt_builder import OPTIONAL, REQUIRED, SHRINKABLE, Fragment
 from genut.llm.provider import Usage
 from genut.llm.structured import FencedSpec
 from genut.state import TERMINAL, CaseStatus, FunctionState, SharedArea, TestCase, text_hash, used_helpers
 
-MODES = ("smoke", "expand")
+MODES = ("smoke", "expand", "coverage")
 
 
 class WrittenCase(BaseModel):
@@ -100,9 +100,13 @@ class TestWriter(Agent[TestWriterOutput]):
         fs: FunctionState,
         stub_usage: str = "",
         knowledge: KnowledgeStore | None = None,
+        uncovered: str = "",
     ) -> list[Fragment]:
+        """uncovered: coverage 모드에서 미커버 줄과 도달 조건 (설계 7.6, coverage.render_uncovered)."""
         if mode not in MODES:
             raise ValueError(f"알 수 없는 작성 모드: {mode}")
+        if mode == "coverage" and not uncovered.strip():
+            raise ValueError("coverage 모드에는 미커버 줄이 필요합니다")
         cfg, counter = self.env.config, self.env.counter
         fn = report.function
         existing = ", ".join(c.name for c in fs.cases) or "(없음)"
@@ -139,6 +143,8 @@ class TestWriter(Agent[TestWriterOutput]):
             core = core_section(stub_usage)
             frags.append(Fragment("stub_usage", stub_usage.strip(), SHRINKABLE, target="system", title="스텁 사용법",
                                   shrinkers=[lambda: core] if core and core != stub_usage.strip() else []))
+        if mode == "coverage":
+            frags.append(Fragment("uncovered", uncovered.strip(), REQUIRED, title="미커버 줄과 도달 조건"))
         example = self.prompt.render(f"example.{cfg.backend}", values)
         if example:
             frags.append(Fragment("example", example, OPTIONAL, title="예시"))
@@ -153,9 +159,14 @@ class TestWriter(Agent[TestWriterOutput]):
         round_: int = 0,
         stub_usage: str = "",
         knowledge: KnowledgeStore | None = None,
+        uncovered: str = "",
+        covers: list[int] | None = None,
     ) -> WriteResult:
-        """케이스를 만들어 fs에 new 상태로 더한다. 새 헬퍼가 있으면 공유 영역 판을 올린다."""
-        frags = self.fragments(mode, report, fs, stub_usage, knowledge)
+        """케이스를 만들어 fs에 new 상태로 더한다. 새 헬퍼가 있으면 공유 영역 판을 올린다.
+
+        covers: coverage 모드에서 이번에 겨냥한 미커버 줄. 만든 케이스의 covers_lines로 남는다.
+        """
+        frags = self.fragments(mode, report, fs, stub_usage, knowledge, uncovered)
         try:
             res = self.call(frags, function=fs.name, label=f"{self.role}-{mode}")
         except AgentError as e:
@@ -164,6 +175,8 @@ class TestWriter(Agent[TestWriterOutput]):
         fs.tokens_used += res.usage.total
         out = merge_cases(res.value, fs, mode, round_)
         out.usage = res.usage
+        for c in out.cases:
+            c.covers_lines = list(covers or [])
         self._event("cases_written", fs.name, mode=mode, cases=[c.name for c in out.cases], helpers=sorted(out.helpers), notes=out.notes)
         return out
 

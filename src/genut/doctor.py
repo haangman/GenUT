@@ -78,6 +78,16 @@ def _gtest_checks(ctx: AppContext, root: Path) -> list[Check]:
                 "대상 소스가 다른 라이브러리의 함수를 부르면 [gtest] link_targets에 그 타깃까지 적으세요.",
             )
         )
+    cov = ctx.config.coverage
+    if cov.enabled:
+        tools = ["gcov"] if cov.tool == "gcov" else ["llvm-profdata", "llvm-cov"]
+        missing = [t for t in tools if not shutil.which(t)]
+        out.append(
+            Check("ok", "커버리지 도구", ", ".join(shutil.which(t) or t for t in tools))
+            if not missing
+            else Check("warn", "커버리지 도구", f"{', '.join(missing)}를 찾을 수 없어 라인 커버리지를 잴 수 없습니다 (설계 7.6).",
+                       "컴파일러와 같은 툴체인의 도구를 PATH에 두거나 [coverage] enabled = false로 끄세요.")
+        )
     if g.crash_backtrace == "gdb" and not shutil.which("gdb"):
         out.append(Check("warn", "gdb", "gdb가 없어 새니타이저 없는 크래시는 종료 코드로만 분류합니다.", "gdb를 설치하거나 [gtest] sanitizers를 켜세요 (설계 8.3)."))
     lists_dir = (root / g.cmake_lists_dir).resolve()

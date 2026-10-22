@@ -920,9 +920,9 @@ memcpy         external          pr_err         external
 <p>목표는 대상 함수의 <b>라인 커버리지 100%</b>입니다. 빌드가 비싸므로 커버리지는 별도 실행 없이 <b>모든 실행에서 함께 수집</b>합니다.</p>
 <div class="tbl"><table>
 <tr><th></th><th>gtest</th><th>KUnit</th></tr>
-<tr><td>수집 방법</td><td>GenUT 전용 빌드 디렉터리(7.5)를 <code>--coverage</code>(gcc) 또는 <code>-fprofile-instr-generate -fcoverage-mapping</code>(clang)으로 구성해 대상 소스까지 계측, 실행 후 gcov/llvm-cov로 lcov 형식 생성</td><td>커널에 <code>CONFIG_GCOV_KERNEL=y</code>, 대상 파일에 <code>GCOV_PROFILE_&lt;obj&gt; := y</code> (사용자가 준비). 실행 스크립트가 게스트의 <code>/sys/kernel/debug/gcov</code>에서 데이터를 꺼내 lcov 형식 coverage.info로 <code>--coverage-out</code>에 저장</td></tr>
-<tr><td>GenUT가 읽는 것</td><td>lcov 트레이스파일(<code>SF:</code>, <code>DA:</code>, <code>BRDA:</code> 줄)</td><td>같음</td></tr>
-<tr><td>계산 범위</td><td>대상 함수의 줄 범위(분석 단계에서 확정)만</td><td>같음</td></tr>
+<tr><td>수집 방법</td><td>GenUT 전용 빌드 디렉터리(7.5)를 <code>--coverage</code>(gcc) 또는 <code>-fprofile-instr-generate -fcoverage-mapping</code>(clang)으로 구성해 대상 소스까지 계측. 측정은 빌드 없이 <b>통과 케이스만</b> <code>--gtest_filter</code>로 한 번 더 실행해서 한다(실패 케이스가 밟은 줄은 세지 않음). gcov는 이전 .gcda를 지우고 실행한 뒤 <code>gcov --json-format</code>을, llvm-cov는 profraw를 합쳐 <code>llvm-cov export -format=lcov</code>를 읽고, 실행 기록에 lcov 형식으로도 남긴다. gcov는 컴파일러와 같은 디렉터리·접두어의 것을 쓴다(버전이 맞아야 함)</td><td>커널에 <code>CONFIG_GCOV_KERNEL=y</code>, 대상 파일에 <code>GCOV_PROFILE_&lt;obj&gt; := y</code> (사용자가 준비). 실행 스크립트가 게스트의 <code>/sys/kernel/debug/gcov</code>에서 데이터를 꺼내 lcov 형식 coverage.info로 <code>--coverage-out</code>에 저장</td></tr>
+<tr><td>GenUT가 읽는 것</td><td>gcov JSON 또는 lcov 트레이스파일(<code>SF:</code>, <code>DA:</code> 줄)</td><td>lcov 트레이스파일</td></tr>
+<tr><td>계산 범위</td><td>대상 함수의 줄 범위(분석 단계에서 확정) 안의 실행 가능한 줄만. 리포트의 커버리지는 최종 확인을 마친 설치본으로 다시 잰 값이다</td><td>같음</td></tr>
 </table></div>
 <figure class="fig"><svg viewBox="0 0 900 255" role="img" aria-label="커버리지 확장 루프. 실행하며 커버리지를 수집하고, lcov에서 대상 함수의 미커버 줄을 뽑아 도달 조건을 붙여 Test Writer에게 케이스 추가를 요청하고, 검증 후 다음 라운드로 돈다. 미커버 0이면 리뷰로, 라운드 소진이면 도달 불가로 분류해 리포트한다">
 <defs><marker id="arw7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>

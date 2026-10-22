@@ -45,7 +45,8 @@ def test_gen_end_to_end(tmp_path):
         "fixer": [_fix(FULL.format("RB_ENOSPC"), ":34 RB_ENOSPC"), _fix(NULL.replace("NULL", "NULL ")), _fix(NULL + "\n// 다시")],
     }), encoding="utf-8")
     base = ["--home", str(home), "--product", "sample"]
-    sets = ["--set", "llm.provider=fake", "--set", f"llm.fake.script={script}", "--set", "gtest.link_targets=[rb,rbslot]"]
+    sets = ["--set", "llm.provider=fake", "--set", f"llm.fake.script={script}", "--set", "gtest.link_targets=[rb,rbslot]",
+            "--set", "coverage.enabled=false"]  # 수정 루프만 본다. 커버리지는 아래 테스트
     r = cli.invoke(app, ["gen", "--file", str(root / "src" / "ring_buffer.c"), "--func", "rb_push", *base, *sets])
     assert r.exit_code == 0, r.output
     assert "[3/8] 사전검증" in r.output and "[6/8] 수정" in r.output
@@ -70,3 +71,31 @@ def test_gen_end_to_end(tmp_path):
     assert view.exit_code == 0 and (run / "view.html").exists()
     again = cli.invoke(app, ["finalize", "latest", *base])
     assert again.exit_code == 0 and "최종 확인 ok" in again.output
+
+
+def test_gen_reaches_full_line_coverage(tmp_path):
+    """sample_project의 rb_push가 커버리지 라운드로 라인 커버리지 100%에 도달한다 (설계 13.1 8단계)."""
+    root, home = tmp_path / "proj", tmp_path / "home"
+    shutil.copytree(SAMPLE, root)
+    cli = CliRunner()
+    assert cli.invoke(app, ["product", "add", "sample", "--root", str(root), "--home", str(home)]).exit_code == 0
+    full = 'struct rb rb;\nunsigned char buf[4];\nrb_init(&rb, buf, sizeof(buf));\nEXPECT_EQ(rb_push(&rb, "abcdef", 6), RB_ENOSPC);'
+    nomem = 'struct rb rb;\nunsigned char buf[8];\nrb_init(&rb, buf, sizeof(buf));\nrb.head = 4;\nrb.tail = 8;\nEXPECT_EQ(rb_push(&rb, "ab", 2), RB_ENOMEM);'
+    script = tmp_path / "script.json"
+    script.write_text(json.dumps({
+        "analyzer": [{"testable": True, "reason": "", "cautions": [], "recommended": []}],
+        "test_writer": [_cases(("test_rb_push_ok", OK)), _cases(("test_rb_push_null", NULL)),
+                        _cases(("test_rb_push_full", full), ("test_rb_push_nomem", nomem))],
+    }), encoding="utf-8")
+    r = cli.invoke(app, ["gen", "--file", str(root / "src" / "ring_buffer.c"), "--func", "rb_push", "--home", str(home), "--product", "sample",
+                         "--set", "llm.provider=fake", "--set", f"llm.fake.script={script}", "--set", "gtest.link_targets=[rb,rbslot]"])
+    assert r.exit_code == 0, r.output
+    assert "[7/8] 커버리지" in r.output and "미커버 :33 :34 :38" in r.output
+
+    run = sorted((home / "products" / "sample" / "runs").iterdir())[-1]
+    fs = RunState.load(run / "state.json").functions["rb_push"]
+    assert fs.coverage.percent == 100.0 and fs.coverage.total == 13 and fs.result == "complete"
+    assert {c.name for c in fs.cases if c.origin == "coverage"} == {"test_rb_push_full", "test_rb_push_nomem"}
+    assert list(run.glob("coverage/m0/rb_push.coverage.info"))  # gcov 결과를 lcov로 남긴다
+    prompt = next(p for p in (run / "prompts").iterdir() if p.name.endswith("test_writer-coverage.md")).read_text(encoding="utf-8")
+    assert "조건 (slot == NULL) 참 (:37) → RB_ENOMEM 반환" in prompt

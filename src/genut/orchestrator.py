@@ -1,8 +1,8 @@
 """오케스트레이터: 생성 실행 하나를 끝까지 진행하는 상태 머신 (설계 3장, 7장).
 
 실행 하나는 소스 파일 하나다. 순서는 코드가 정하고 LLM은 에이전트 호출로 좁은 질문에만 답한다.
-  ① 분석 → ② 스텁 → ③ 사전검증 → ④ 스모크 → ⑤ 확장 → ⑥ 수정 → 최종 확인
-  (⑦ 커버리지는 8단계, ⑧ Reviewer 에이전트는 10단계에서 들어온다. 코드 리뷰 검사는 통과 즉시 돈다)
+  ① 분석 → ② 스텁 → ③ 사전검증 → ④ 스모크 → ⑤ 확장 → ⑥ 수정 → ⑦ 커버리지 → 최종 확인
+  (⑧ Reviewer 에이전트는 10단계에서 들어온다. 코드 리뷰 검사는 통과 즉시 돈다)
 - 검증 라운드: 의미 검사로 먼저 걸러 낸 뒤 모든 함수를 한 번에 빌드하고(7.8) 함수별로 실행한다.
   빌드에는 통과·새·미실행 케이스만 넣는다. 실패 케이스는 고친 뒤(new) 다시 들어간다
 - 케이스는 단조 진행한다(7.4). 통과 케이스는 바뀌지 않고, 공유 영역이 바뀐 라운드에 통과 케이스가
@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from genut.agents.analyzer import Analyzer
+from genut.agents.analyzer import Analyzer, UnreachableAnalyzer
 from genut.agents.base import AgentEnv, AgentError
 from genut.agents.fixer import Fixer, apply_fix, failure_text, give_up
 from genut.agents.test_writer import TestWriter
@@ -33,6 +33,7 @@ from genut.backends.base import Backend, Rendered, RunResult, TestUnit
 from genut.backends.stub import NoopStubAdapter, StubAdapter
 from genut.budget import Budget
 from genut.context import AppContext
+from genut.coverage import function_coverage, reach_conditions, render_uncovered
 from genut.finalize import final_check
 from genut.knowledge import KnowledgeStore
 from genut.llm.factory import make_counter, make_provider
@@ -41,13 +42,14 @@ from genut.llm.provider import ChatProvider
 from genut.models import CaseResult, FailureInfo
 from genut.report import classify_result, render_report
 from genut.rules import load_rules
-from genut.state import CaseStatus, FunctionState, FunctionStatus, RunState, Snapshot, TestCase, text_hash
+from genut.state import CaseStatus, CoverageSummary, FunctionState, FunctionStatus, RunState, Snapshot, TestCase, UnreachableLine, text_hash
 from genut.trace import RunDir, Trace
 from genut.verify.classify import Classifier, allowed_strategies
 from genut.verify.review import justified, review_case
 
-STAGES = ("analyze", "stub", "preflight", "smoke", "expand", "fix")
-STEP = {"analyze": (1, "분석"), "stub": (2, "스텁"), "preflight": (3, "사전검증"), "smoke": (4, "스모크"), "expand": (5, "확장"), "fix": (6, "수정")}
+STAGES = ("analyze", "stub", "preflight", "smoke", "expand", "fix", "coverage")
+STEP = {"analyze": (1, "분석"), "stub": (2, "스텁"), "preflight": (3, "사전검증"), "smoke": (4, "스모크"), "expand": (5, "확장"), "fix": (6, "수정"),
+        "coverage": (7, "커버리지")}
 BUILDABLE = (CaseStatus.NEW, CaseStatus.PASS, CaseStatus.NOT_RUN)
 FAILING = (CaseStatus.FAIL, CaseStatus.CRASH)
 _SUFFIX = re.compile(r"_\d+$")
@@ -154,6 +156,7 @@ class Orchestrator:
             self.provider = FakeProvider() if self.opts.dry_run else make_provider(cfg)
         self.env = AgentEnv(self.provider, make_counter(self.provider, cfg, ctx.home), cfg, self.rules, ctx.home, self.trace, self.budget)
         self.analyzer, self.writer, self.fixer = Analyzer(self.env), TestWriter(self.env), Fixer(self.env)
+        self.unreachable = UnreachableAnalyzer(self.env)
         self.started = datetime.now()
         self._write_run_json()
 
@@ -302,6 +305,61 @@ class Orchestrator:
         self._fix_loop()
         self._summary("fix")
 
+    # ========================================================== ⑦ 커버리지
+    def _coverage(self) -> None:
+        """미커버 줄 → 도달 조건 → 케이스 추가를 목표에 닿거나 라운드가 끝날 때까지 (설계 7.6)."""
+        cov = self.cfg.coverage
+        if not cov.enabled or self.opts.dry_run:
+            self._say("coverage", "꺼짐" if not cov.enabled else "dry-run이라 측정하지 않음")
+            return
+        rounds = self.cfg.budget.max_coverage_rounds
+        for rnd in range(rounds + 1):
+            todo = []
+            for u in self.units:
+                s = self._measure(u, f"coverage/m{rnd}")
+                if s is None:
+                    continue
+                self._say("coverage", f"{u.function}: 라인 {s.percent:.0f}% ({s.covered}/{s.total})" + (" · 미커버 " + " ".join(f":{n}" for n in s.uncovered_lines) if s.uncovered_lines else ""))
+                if u.state.status == FunctionStatus.ACTIVE and s.uncovered_lines and s.percent + 1e-9 < cov.target_line_percent:
+                    todo.append(u)
+            if not todo or rnd == rounds:
+                break
+            if not self.budget.can_build():
+                self._note("빌드 예산이 없어 커버리지 라운드를 멈췄습니다")
+                break
+            self.budget.coverage_rounds += 1
+            for u in todo:
+                lines = u.state.coverage.uncovered_lines
+                self._write(u, "coverage", uncovered=render_uncovered(reach_conditions(u.report, lines)), covers=lines)
+            self._verify("coverage")
+            self._fix_loop()
+        for u in self.units:
+            s = u.state.coverage
+            if s is not None and s.uncovered_lines and s.percent + 1e-9 < cov.target_line_percent:
+                self._classify_unreachable(u)
+
+    def _measure(self, u: TestUnit, sub: str) -> CoverageSummary | None:
+        """통과 케이스만으로 대상 함수의 라인 커버리지를 잰다. 빌드는 하지 않는다."""
+        passed = u.state.passed()
+        if not passed:
+            return None
+        fc = self.backend.coverage(self.backend.render(u, passed), [c.name for c in passed], self.rundir.path / sub)
+        s = function_coverage(fc, u.report.function)
+        if s is not None:
+            u.state.coverage = s
+            self.trace.event("coverage", function=u.function, covered=s.covered, total=s.total, uncovered=s.uncovered_lines)
+        return s
+
+    def _classify_unreachable(self, u: TestUnit) -> None:
+        lines = u.state.coverage.uncovered_lines
+        try:
+            u.state.unreachable = self.unreachable.classify(u.report, u.state, render_uncovered(reach_conditions(u.report, lines)), lines,
+                                                            self.stub_usage.get(u.function, ""))
+        except AgentError as e:
+            self._agent_error(e, u, "도달 불가 분류")
+            u.state.unreachable = [UnreachableLine(line=n, category="unknown", reason=f"분류하지 못함 ({e.kind})") for n in lines]
+        self._say("coverage", f"{u.function}: 남은 미커버 " + ", ".join(f":{x.line} {x.category}" for x in u.state.unreachable))
+
     def _summary(self, stage: str) -> None:
         for u in self.units:
             c = [x.status for x in u.state.cases]
@@ -309,19 +367,20 @@ class Orchestrator:
                              f"제거 {sum(1 for x in u.state.cases if not x.is_live)}" + (f" · {u.state.status.value}" if u.state.status != FunctionStatus.ACTIVE else ""))
 
     # ============================================================ 작성
-    def _write(self, u: TestUnit, mode: str) -> list[str]:
+    def _write(self, u: TestUnit, mode: str, uncovered: str = "", covers: list[int] | None = None) -> list[str]:
         """케이스를 쓴다. candidates개 후보를 반복 호출로 만들고 케이스 단위로 합친다 (4.4)."""
         names: list[str] = []
         for _ in range(max(1, self.cfg.budget.candidates)):
             try:
-                out = self.writer.write(mode, u.report, u.state, self.state.round, self.stub_usage.get(u.function, ""), self.knowledge)
+                out = self.writer.write(mode, u.report, u.state, self.state.round, self.stub_usage.get(u.function, ""), self.knowledge,
+                                        uncovered=uncovered, covers=covers)
             except AgentError as e:
                 self._agent_error(e, u, f"작성({mode})")
                 break
             names += [c.name for c in out.cases]
             for n in out.notes:
                 self.trace.event("writer_note", function=u.function, note=n)
-        self._say("smoke" if mode == "smoke" else "expand", f"{u.function}: 케이스 {len(names)}개 생성")
+        self._say(mode, f"{u.function}: 케이스 {len(names)}개 생성")
         return names
 
     def _dedupe(self, added: dict[str, list[str]]) -> None:
@@ -655,7 +714,7 @@ class Orchestrator:
             "dry_run": self.opts.dry_run,
             "stop_after": self.opts.stop_after,
             "rules_hash": text_hash(self.rules.prompt_block()),
-            "prompts": {a.role: a.prompt.digest() for a in (self.analyzer, self.writer, self.fixer)},
+            "prompts": {a.role: a.prompt.digest() for a in (self.analyzer, self.writer, self.fixer, self.unreachable)},
             "started": self.started.isoformat(timespec="seconds"),
             "finished": datetime.now().isoformat(timespec="seconds") if finished else "",
             "stage": self.state.stage,
@@ -681,6 +740,13 @@ class Orchestrator:
                     self.state.interrupted = True
                     final_check(self.backend, self.units, self.state, self.budget, self.rundir, self.cfg.finalize.install_unverified,
                                 self.trace, interrupted=True)
+                if self.cfg.coverage.enabled and not self.state.interrupted:
+                    for u in self.units:  # 최종 확인으로 케이스가 빠졌을 수 있으니 설치본 기준으로 다시 잰다
+                        if u.state.final_check in ("ok", "partial"):
+                            try:
+                                self._measure(u, "final/coverage")
+                            except Exception as e:  # noqa: BLE001 - 재측정 실패로 마무리를 멈추지 않는다
+                                self._note(f"{u.function}: 최종 커버리지를 재지 못했습니다: {e!r}")
             for fs in self.state.functions.values():
                 fs.result = classify_result(fs, self.cfg.coverage.target_line_percent)
             self.state.finished = not self.stopped_after
