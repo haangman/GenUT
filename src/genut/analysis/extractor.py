@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from genut.analysis.compile_db import CompileEntry, builtin_include_args, guess_target
+from genut.analysis.compile_db import CompileEntry, builtin_include_args, compiler_target, guess_target
 from genut.analysis.flag_sanitizer import FlagSanitizer
 from genut.analysis.model import Branch, CallSite, FunctionInfo, GlobalRef, ParamInfo, ReturnPoint, TypeDef
 from genut.analysis.parser import ParseResult, parse
@@ -75,7 +75,7 @@ def analysis_args(entry: CompileEntry, kernel: bool, sanitizer: FlagSanitizer | 
     dropped: list[str] = []
     if sanitizer is not None and kernel:
         args, dropped = sanitizer.sanitize(args)
-    target = guess_target(entry, kernel)
+    target = guess_target(entry, kernel) or (None if kernel else compiler_target(entry))
     if target:
         args = [f"--target={target}"] + args
     return args, dropped

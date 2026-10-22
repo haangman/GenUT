@@ -70,7 +70,16 @@ def _gtest_checks(ctx: AppContext, root: Path) -> list[Check]:
     src = root / g.cmake_source_dir / "CMakeLists.txt"
     out.append(Check("ok", "CMakeLists.txt", str(src)) if src.exists() else Check("fail", "CMakeLists.txt", f"{src}가 없습니다.", "[gtest] cmake_source_dir를 확인하세요."))
     if not g.link_targets:
-        out.append(Check("warn", "link_targets", "테스트가 링크할 사용자 타깃이 비어 있습니다.", "[gtest] link_targets에 대상 소스가 속한 CMake 타깃 이름을 적으세요."))
+        out.append(
+            Check(
+                "warn",
+                "link_targets",
+                "비어 있어 CMake File API로 대상 소스가 속한 타깃만 테스트마다 링크합니다.",
+                "대상 소스가 다른 라이브러리의 함수를 부르면 [gtest] link_targets에 그 타깃까지 적으세요.",
+            )
+        )
+    if g.crash_backtrace == "gdb" and not shutil.which("gdb"):
+        out.append(Check("warn", "gdb", "gdb가 없어 새니타이저 없는 크래시는 종료 코드로만 분류합니다.", "gdb를 설치하거나 [gtest] sanitizers를 켜세요 (설계 8.3)."))
     lists_dir = (root / g.cmake_lists_dir).resolve()
     if src.exists():
         text = src.read_text(encoding="utf-8", errors="replace")

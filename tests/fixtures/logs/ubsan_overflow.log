@@ -1,0 +1,5 @@
+[ RUN      ] StrUtilStrClampTest.test_str_clamp_max
+/work/proj/src/str_util.c:31:12: runtime error: signed integer overflow: 2147483647 + 1 cannot be represented in type 'int'
+    #0 0x55d0c1a2b3c4 in str_clamp /work/proj/src/str_util.c:31
+    #1 0x55d0c1a2c111 in StrUtilStrClampTest_test_str_clamp_max_Test::TestBody() /work/proj/build-genut/genut-src/str_util_str_clamp_test.cc:22
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /work/proj/src/str_util.c:31:12

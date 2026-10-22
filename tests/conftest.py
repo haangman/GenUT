@@ -1,5 +1,8 @@
 import json
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -45,6 +48,21 @@ def sample_db(tmp_path):
     return write_compile_db(tmp_path / "compile_commands.json")
 
 
+def toolchain_missing():
+    """cmake·C++ 컴파일러·gtest 중 없는 것이 있으면 이유를, 다 있으면 None. gtest는 find_package로 확인한다."""
+    cmake = shutil.which("cmake")
+    if not cmake or not any(shutil.which(c) for c in ("c++", "g++", "clang++")):
+        return "cmake 또는 C++ 컴파일러 없음"
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+        Path(d, "CMakeLists.txt").write_text("cmake_minimum_required(VERSION 3.19)\nproject(probe CXX)\nfind_package(GTest REQUIRED)\n")
+        cmd = [cmake, "-S", d, "-B", str(Path(d) / "b")] + (["-G", "Ninja"] if shutil.which("ninja") else [])
+        try:
+            r = subprocess.run(cmd, capture_output=True, timeout=180)
+        except (OSError, subprocess.SubprocessError) as e:
+            return f"cmake 실행 실패: {e}"
+    return None if r.returncode == 0 else "gtest를 찾지 못함 (find_package(GTest))"
+
+
 def pytest_collection_modifyitems(config, items):
     from genut.analysis.parser import libclang_available
 
@@ -53,3 +71,9 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "libclang" in item.keywords:
                 item.add_marker(skip)
+    integration = [item for item in items if "integration" in item.keywords]
+    if integration:
+        reason = toolchain_missing()
+        if reason:
+            for item in integration:
+                item.add_marker(pytest.mark.skip(reason=reason))

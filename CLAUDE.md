@@ -44,12 +44,13 @@ uv pip install --python .venv -e ".[dev]"
 ```
 
 - libclang이 필요한 테스트(`@pytest.mark.libclang`)는 libclang을 불러오지 못하면 `tests/conftest.py`의 `pytest_collection_modifyitems`가 건너뛴다. pip `libclang` 패키지만 있으면 되고 시스템 컴파일러는 필요 없다(가짜 시스템 헤더 `tests/fixtures/sysinc`를 쓴다).
-- `integration` 마커는 `pyproject.toml`에 등록만 되어 있다. `tests/integration/`과 "cmake·컴파일러·gtest가 없으면 건너뛰기" 처리는 아직 없으므로, 통합 테스트를 처음 추가할 때(6단계) 같은 훅에 함께 넣는다.
+- 통합 테스트(`tests/integration/`, `@pytest.mark.integration`)는 샘플 프로젝트를 실제 cmake·C++ 컴파일러·gtest로 빌드·실행한다. 셋 중 하나라도 없으면(gtest는 `find_package(GTest)`로 확인) 같은 훅이 건너뛴다. 건너뛴 채로 끝나면 생성 템플릿을 검증하지 못한 것이므로 `-rs`로 건너뛴 이유를 확인한다.
+- 이 Windows 개발 PC의 툴체인은 MSYS2 UCRT64(gcc·cmake·ninja·gtest·gdb, `C:\msys64\ucrt64\bin`)다. 전체 테스트는 그 경로를 PATH 앞에 두고 돌린다: `PATH="/c/msys64/ucrt64/bin:$PATH" .venv/Scripts/python -m pytest -q -rs` (Bash). MinGW라 ASan/UBSan은 없어 새니타이저는 `tests/fixtures/logs/`의 로그 픽스처로만 검증한다.
 - 린터·포매터는 설정되어 있지 않다.
 
 ## 진행 상황
 
-설계 13.1의 14단계 중 1~5단계(스켈레톤, LLM 계층, 분석기, 검증 기반, 규칙·에이전트)가 구현되었고 다음은 6단계(gtest 백엔드)다. `agents/`에는 Agent base, Analyzer, Test Writer(스모크·확장 모드)가 있다. Test Writer의 커버리지 모드와 Analyzer의 도달 불가 분류는 8단계, 후보 여러 개를 케이스 단위로 합치기는 7단계 몫이다. `backends/gtest`, `viewer`는 아직 빈 패키지이고 `backends/kunit`에는 `kbuild.py`만 있다. CLI에는 `version`·`init`·`doctor`·`show`·`product`만 있고 `knowledge`는 하위 명령이 비어 있다. `gen`·`view`·`finalize`·`replay`·`eval` 등은 설계 11.1의 명세만 있다.
+설계 13.1의 14단계 중 1~6단계(스켈레톤, LLM 계층, 분석기, 검증 기반, 규칙·에이전트, gtest 백엔드)가 구현되었고 다음은 7단계(수정 루프 + 관찰 도구)다. 오케스트레이터는 아직 없어서 에이전트와 백엔드는 따로 동작한다(7단계에서 잇는다). `agents/`에는 Agent base, Analyzer, Test Writer(스모크·확장 모드)가 있다. Test Writer의 커버리지 모드와 Analyzer의 도달 불가 분류는 8단계, 후보 여러 개를 케이스 단위로 합치기는 7단계 몫이다. 스텁은 `NoopStubAdapter`뿐이다(어댑터는 11단계). `viewer`는 아직 빈 패키지이고 `backends/kunit`에는 `kbuild.py`만 있다. CLI에는 `version`·`init`·`doctor`·`show`·`product`만 있고 `knowledge`는 하위 명령이 비어 있다. `gen`·`view`·`finalize`·`replay`·`eval` 등은 설계 11.1의 명세만 있다.
 
 ## 아키텍처
 
@@ -61,9 +62,10 @@ uv pip install --python .venv -e ".[dev]"
 - **저장소 분리** (`paths.py`, `products.py`, `context.py`): 공통 데이터는 `$GENUT_HOME`(기본 `~/.genut`), 프로덕트 데이터는 `$GENUT_HOME/products/<이름>/`. 프로덕트는 `products.toml`에 등록된 소스 트리 루트로 현재 디렉터리에서 자동 탐지한다. 프로덕트 소스 트리에는 최종 테스트 파일 말고 아무것도 쓰지 않고, 다른 프로덕트의 지식은 절대 로드하지 않는다(설계 11.5). 프로덕트·설정이 필요한 CLI 명령은 `make_context()`로 홈·프로덕트·설정을 한 번에 얻는다.
 - **실행 기록** (`trace.py`): 생성 실행 한 번마다 `runs/<시각>-<라벨>/`을 만들고 `trace.jsonl`과 프롬프트·응답 전문을 모두 남긴다. 뷰어·replay는 이 기록만 읽는다.
 - **LLM 계층** (`llm/`): 에이전트 → `structured.ask_structured`(제약 디코딩 / JSON 추출·복구 재요청 / 펜스 코드 블록, `length`면 출력 한도 두 배로 1회 재요청) → `ChatProvider` 프로토콜(`anthropic`, `openai_compat`, `fake`). 설계 기준 모델은 운영용 사내 Gemma 4(32k 컨텍스트 중형 모델)이므로 지시는 짧게, 선택은 열거형으로, 수정은 부분 패치가 아닌 케이스 전체 재작성으로 받는다. 모든 프롬프트는 `prompt_builder.PromptBuilder`로 조립한다. 조각(`Fragment`)마다 REQUIRED/SHRINKABLE/OPTIONAL 우선순위가 있고, 넘치면 낮은 것부터 빼거나 줄이며, 필수 조각만으로 넘치면 `ContextOverflow`를 낸다. Anthropic provider는 temperature 같은 샘플링 인자를 보내지 않는다(API가 받지 않음).
-- **정적 분석** (`analysis/`): `compile_db`(상대 경로 절대화, DB에 없는 새 테스트 파일은 이웃 항목 플래그 차용, 커널 `.o.cmd` 폴백, pip libclang에 없는 컴파일러 내장 헤더 탐색) → `flag_sanitizer`(gcc 전용 플래그 제거, 모르는 플래그는 다시 파싱하며 학습) → `parser`/`extractor`(libclang → `FunctionInfo`) → `linkscope`(호출 심볼마다 링크 시 정의 유무 판정 = 스텁 필요 여부. gtest와 커널 built-in/모듈/`EXPORT_SYMBOL`을 구분) → `summarizer`(분석 보고서를 프롬프트 조각으로).
+- **정적 분석** (`analysis/`): `compile_db`(상대 경로 절대화, DB에 없는 새 테스트 파일은 이웃 항목 플래그 차용, 커널 `.o.cmd` 폴백, 컴파일러의 기본 include 검색 경로 전체(`-E -v`)를 libclang에 넘김. CMake는 이 경로를 compile DB에 적지 않고 pip libclang은 모른다. Windows MinGW면 `--target`도 맞춘다) → `flag_sanitizer`(gcc 전용 플래그 제거, 모르는 플래그는 다시 파싱하며 학습) → `parser`/`extractor`(libclang → `FunctionInfo`) → `linkscope`(호출 심볼마다 링크 시 정의 유무 판정 = 스텁 필요 여부. gtest와 커널 built-in/모듈/`EXPORT_SYMBOL`을 구분) → `summarizer`(분석 보고서를 프롬프트 조각으로).
 - **검증** (`verify/`): 원시 로그는 LLM에 주지 않는다. `diagnostics`가 gcc/clang/ld/modpost 출력을 구조화·중복 제거하고 케이스(공유 영역이면 `@shared`)에 귀속시킨다. `classify`가 실패 종류와 권장 전략을 정하며, 전략 사다리 `fix_case → add_stub → drop_case → narrow_scope → give_up`에서 Fixer는 권장 전략과 그 오른쪽(더 포기하는 쪽)만 고를 수 있다(`allowed_strategies`). `staged`는 빌드 전 libclang 의미 검사, `logs/`는 KTAP·gtest 결과 파싱, 크래시 브리프, 토큰 상한 안의 우선순위 축약을 맡는다.
 - **에이전트** (`agents/`): 모든 호출은 `Agent.call()`을 거친다. 함수당 토큰 예산 확인 → `PromptBuilder`로 한도 맞추기 → `ask_structured` → 실행 기록(`prompts/NN-<label>.md`, `llm_call` 이벤트에 잘린 조각과 프롬프트 해시) → 예산에 토큰 더하기 순이다. 예산 초과나 필수 조각만으로 넘치는 경우에는 LLM을 부르지 않는다. 실패는 모두 `AgentError(kind=...)`로 나온다. 에이전트는 프롬프트 문자열이 아니라 `Fragment` 목록을 만들고, 조립기는 목록 뒤쪽의 SHRINKABLE부터 줄이므로 목록 순서가 곧 축약 순서다. 역할 지시문은 `agents/prompts/<en|ko>/<role>.md`이고 파일 형식은 설계 11.4에 있다. Test Writer 응답은 `merge_cases`가 정리한다(통과 케이스와 같은 이름은 버림, 이름을 C 식별자로, 새 헬퍼는 공유 영역 판을 올려 추가).
+- **백엔드** (`backends/`): 공통 입력·결과 형식은 `base.py`(`TestUnit` → `Rendered` → `BuildResult`/`RunResult`), 스텁 연동 지점은 `stub.py`다. gtest(`backends/gtest/`)는 사용자 CMakeLists를 고치지 않는다. 최상위 `project()` 직후 실행되는 주입 파일(`CMAKE_PROJECT_INCLUDE`)이 최상위 처리 끝에 전용 빌드 디렉터리 안 `genut-src/`의 관리 CMakeLists를 include하고, 그 파일이 테스트 파일을 glob해 파일마다 `genut_<src>_<func>` 타깃을 만든다. 그래서 작업 중에는 프로덕트 트리에 아무것도 쓰지 않고 `install()`만 쓴다. 지연 실행 안에서는 `add_subdirectory`가 금지라 include를 쓴다. `link_targets`가 비면 File API로 찾은 타깃을 테스트별로 `genut_links.cmake`에 둔다. 뼈대(`skeleton.py`)는 C 헤더를 `extern "C"`로 감싸고 fixture + `TEST_F`로 만들며, `LineMap`으로 진단을 케이스에 귀속한다. 빌드 성공 여부는 실행 파일이 새로 생겼는지로 판단하고(빌드 전에 지움), 크래시로 JSON이 없으면 마지막 `[ RUN ]` 케이스를 용의자로 gdb 백트레이스를 받는다.
 - 여러 계층이 함께 쓰는 모델(`Diagnostic`, `CrashBrief`, `FailureInfo`, `CaseResult`)은 순환 import를 피하려고 `models.py`에 둔다.
 
 ## 코드 규칙

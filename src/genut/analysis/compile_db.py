@@ -159,13 +159,47 @@ def guess_target(entry: CompileEntry, kernel: bool) -> str | None:
     return None
 
 
-_BUILTIN_CACHE: dict[str, list[str]] = {}
+_BUILTIN_CACHE: dict[tuple[str, str], list[str]] = {}
+_MACHINE_CACHE: dict[str, str] = {}
+_SEARCH = re.compile(r"#include <\.\.\.> search starts here:\n(.*?)\nEnd of search list", re.S)
+
+
+def compiler_search_dirs(exe: str, lang: str) -> list[str]:
+    """컴파일러의 기본 #include <...> 검색 경로 (`<cc> -E -v -x <lang> -`).
+
+    CMake는 이 경로를 컴파일 명령에 적지 않는다. libclang은 모르므로 넘겨야 한다.
+    gcc 내장 디렉터리만 넘기면 그 안의 #include_next(MinGW의 stddef.h 등)가 깨진다.
+    """
+    try:
+        r = subprocess.run([exe, "-E", "-v", "-x", lang, "-"], input="", capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    m = _SEARCH.search(r.stderr.replace("\r\n", "\n"))
+    if not m:
+        return []
+    dirs = [line.strip().removesuffix(" (framework directory)") for line in m.group(1).splitlines() if line.strip()]
+    return [os.path.normpath(d) for d in dirs if Path(d).is_dir()]
+
+
+def compiler_target(entry: CompileEntry) -> str | None:
+    """Windows의 GNU 툴체인(MinGW)이면 그 트리플. libclang의 Windows 기본값(MSVC)으로는 MinGW 헤더를 읽지 못한다."""
+    exe = shutil.which(entry.compiler) if entry.compiler else None
+    if not exe:
+        return None
+    if exe not in _MACHINE_CACHE:
+        try:
+            r = subprocess.run([exe, "-dumpmachine"], capture_output=True, text=True, timeout=10)
+            _MACHINE_CACHE[exe] = r.stdout.strip() if r.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            _MACHINE_CACHE[exe] = ""
+    machine = _MACHINE_CACHE[exe]
+    return machine if "mingw" in machine else None
 
 
 def builtin_include_args(entry: CompileEntry, configured: str = "") -> list[str]:
-    """컴파일러 내장 헤더(stddef.h 등) 위치. pip의 libclang에는 이 헤더가 없다.
+    """컴파일러 기본 헤더(stddef.h, C++ 표준 라이브러리, 시스템 include) 위치. pip의 libclang에는 이 헤더가 없다.
 
-    설정값 > 컴파일러의 -print-file-name=include (gcc) > clang -print-resource-dir 순.
+    설정값 > 컴파일러의 기본 검색 경로 전체(-E -v) > -print-file-name=include (gcc) > clang -print-resource-dir 순.
     -nostdinc를 쓰는 빌드(커널)는 자기 헤더를 쓰므로 건드리지 않는다.
     """
     if configured:
@@ -173,12 +207,15 @@ def builtin_include_args(entry: CompileEntry, configured: str = "") -> list[str]
         return ["-resource-dir", str(p)] if (p / "include").is_dir() else ["-isystem", str(p)]
     if "-nostdinc" in entry.arguments:
         return []
-    key = entry.compiler
+    lang = "c" if entry.file.suffix == ".c" else "c++"
+    key = (entry.compiler, lang)
     if key in _BUILTIN_CACHE:
         return _BUILTIN_CACHE[key]
     out: list[str] = []
     exe = shutil.which(entry.compiler) if entry.compiler else None
     if exe:
+        out = [x for d in compiler_search_dirs(exe, lang) for x in ("-isystem", d)]
+    if exe and not out:
         try:
             r = subprocess.run([exe, "-print-file-name=include"], capture_output=True, text=True, timeout=10)
             path = Path(r.stdout.strip())

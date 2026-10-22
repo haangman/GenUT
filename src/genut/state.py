@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from enum import StrEnum
 from pathlib import Path
 
@@ -35,6 +36,19 @@ LIVE = {CaseStatus.NEW, CaseStatus.PASS, CaseStatus.FAIL, CaseStatus.CRASH, Case
 
 def text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def used_helpers(texts: list[str], helpers: dict[str, str]) -> list[str]:
+    """texts가 직접 또는 다른 헬퍼를 거쳐 쓰는 공유 헬퍼 이름."""
+    used: list[str] = []
+    frontier = list(texts)
+    while frontier:
+        text = frontier.pop()
+        for name, code in helpers.items():
+            if name not in used and re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text):
+                used.append(name)
+                frontier.append(code)
+    return sorted(used)
 
 
 class CaseEvent(BaseModel):

@@ -23,7 +23,7 @@ from genut.knowledge import KnowledgeStore
 from genut.llm.prompt_builder import OPTIONAL, SHRINKABLE, Fragment
 from genut.llm.provider import Usage
 from genut.llm.structured import FencedSpec
-from genut.state import TERMINAL, CaseStatus, FunctionState, SharedArea, TestCase, text_hash
+from genut.state import TERMINAL, CaseStatus, FunctionState, SharedArea, TestCase, text_hash, used_helpers
 
 MODES = ("smoke", "expand")
 
@@ -59,23 +59,6 @@ def identifier(name: str, fallback: str) -> str:
     if not s:
         return fallback
     return f"{fallback}_{s}" if s[0].isdigit() else s
-
-
-def _mentions(text: str, name: str) -> bool:
-    return re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text) is not None
-
-
-def used_helpers(texts: list[str], helpers: dict[str, str]) -> list[str]:
-    """texts가 직접 또는 다른 헬퍼를 거쳐 쓰는 헬퍼 이름."""
-    used: list[str] = []
-    frontier = list(texts)
-    while frontier:
-        text = frontier.pop()
-        for name, code in helpers.items():
-            if name not in used and _mentions(text, name):
-                used.append(name)
-                frontier.append(code)
-    return sorted(used)
 
 
 # ---------------------------------------------------------------- fragments

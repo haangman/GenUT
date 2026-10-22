@@ -2,12 +2,14 @@
 
 빌드 없이 같은 플래그로 테스트 파일을 파싱해 초 단위로 흔한 실수를 잡는다.
 컴파일 DB에 -Werror가 있거나 커널이 CONFIG_WERROR=y면 경고도 오류로 본다.
-프레임워크·시스템 헤더(gtest/gtest.h 등)를 찾지 못하면 이 환경에서는 의미 검사를 할 수 없으므로
-"unavailable"로 알리고 빌드 단계에 맡긴다.
+프레임워크·시스템 헤더(gtest/gtest.h 등)를 찾지 못하거나, 시스템 헤더(-isystem) 안에서 오류가 나면
+(libclang이 더 새 컴파일러의 표준 라이브러리를 해석하지 못하는 경우) 이 환경에서는 의미 검사를 할 수
+없으므로 "unavailable"로 알리고 빌드 단계에 맡긴다.
 """
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,10 +47,29 @@ def semantic_check(path: Path, text: str, args: list[str], werror: bool = False,
         return CheckResult(False, reason=str(e))
     # 헤더를 못 찾으면 libclang은 fatal로 낸다. 빌드 로그 파서처럼(fatal error → error) 오류로 맞춘다.
     diags = [d.model_copy(update={"severity": "error"}) if d.severity == "fatal" else d for d in to_diagnostics(pr.tu, stage="check")]
+    sysdirs = _system_dirs(args)
     for d in diags:
         if d.severity == "error" and FRAMEWORK_HEADERS.search(d.message):
             return CheckResult(False, reason=f"의미 검사 불가(프레임워크 헤더 없음): {d.message}")
+        if d.severity == "error" and d.file and any(_under(d.file, s) for s in sysdirs):
+            return CheckResult(False, reason=f"의미 검사 불가(libclang이 시스템 헤더를 해석하지 못함, 컴파일러와 버전 차이): {d.short()}")
     return CheckResult(True, dedupe(errors_only(diags, werror)))
+
+
+def _system_dirs(args: list[str]) -> list[str]:
+    out = []
+    for i, a in enumerate(args):
+        if a == "-isystem" and i + 1 < len(args):
+            out.append(args[i + 1])
+        elif a.startswith("-isystem") and len(a) > len("-isystem"):
+            out.append(a[len("-isystem"):])
+    return out
+
+
+def _under(path: str, parent: str) -> bool:
+    p = os.path.normcase(os.path.normpath(path))
+    q = os.path.normcase(os.path.normpath(parent)).rstrip("\\/")
+    return p.startswith(q + os.sep)
 
 
 def cpp_args_from_c(args: list[str], std: str = "c++17") -> list[str]:

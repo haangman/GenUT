@@ -587,13 +587,13 @@ Fixer가 고를 수 있는 전략은 다섯 가지이고, 올라갈수록 "덜 �
 
 | 항목 | 설계 |
 |---|---|
-| 테스트 타깃 | GenUT가 관리하는 `CMakeLists.txt`(위치는 `[gtest] cmake_lists_dir`, 사용자가 루트에서 `add_subdirectory`로 한 번 연결)에 함수마다 테스트 실행 파일 타깃(`genut_<src>_<func>`)을 추가한다. 함수별 테스트 파일은 `[gtest] output_dir`에 쓴다(7.8) |
-| 링크 | `[gtest] link_targets`에 적힌 사용자 타깃을 링크한다. 비어 있으면 CMake File API로 대상 소스가 속한 타깃을 찾아 제안한다. `linkable` 판정(6.4)도 같은 정보로 한다 |
+| 테스트 타깃 | GenUT가 관리하는 `CMakeLists.txt`는 테스트 파일을 glob으로 찾아 파일마다 실행 파일 타깃(`genut_<src>_<func>`)을 만든다. 작업 중에는 이 파일과 테스트 파일을 전용 빌드 디렉터리 안(`genut-src/`)에만 두고, 최상위 `project()` 직후 실행되는 주입 파일(`CMAKE_PROJECT_INCLUDE`)이 최상위 처리가 끝날 때 그것을 include한다. 그래서 GenUT 빌드에는 사용자의 수정이 필요 없고, 프로덕트 트리는 설치 전까지 그대로다(11.2). 설치 때 같은 CMakeLists를 `[gtest] cmake_lists_dir`에, 함수별 테스트 파일을 `[gtest] output_dir`에 쓴다(7.8). 사용자가 루트에서 `add_subdirectory`로 한 번 연결하면 사용자 빌드에서도 같은 테스트가 빌드되며, GenUT 빌드는 그 설치본을 건너뛴다 |
+| 링크 | `[gtest] link_targets`에 적힌 사용자 타깃을 링크한다. 비어 있으면 CMake File API로 대상 소스가 속한 타깃을 찾아 **그 테스트 파일에만** 쓴다(소스 파일마다 속한 라이브러리가 다르므로). 테스트별 링크 타깃은 관리 디렉터리의 `genut_links.cmake`에 남고, 설치는 그 함수의 항목만 갱신한다. `linkable` 판정(6.4)도 같은 정보(링크 타깃과 의존 타깃의 소스)로 한다 |
 | 전용 빌드 디렉터리 | `[gtest] cmake_build_dir`(기본 `build-genut`)를 GenUT가 구성한다. 사용자 빌드 디렉터리는 건드리지 않는다. 구성 시 커버리지 플래그(`--coverage` 또는 llvm 계열), 선택한 새니타이저, `coverage_opt_level`을 `CMAKE_C_FLAGS`/`CMAKE_CXX_FLAGS`에 넣으므로 대상 소스도 계측된 채 빌드된다. compile_commands.json은 이 디렉터리 것을 쓴다 |
 | C 소스를 C++ 테스트에서 | 뼈대의 include 블록을 `extern "C" { ... }`로 감싼다. 대상 헤더가 C++에서 컴파일되지 않으면(예: `new`를 식별자로 사용) `header_not_cpp_clean`으로 분류해 사람에게 안내한다 |
 | 스텁과 실제 정의의 충돌 | 링크된 타깃에 이미 정의가 있는 심볼을 스텁하면 중복 정의가 난다. 심볼 교체 방식(`--wrap`, weak 심볼, objcopy 등)은 스텁 도구 md가 정하며, GenUT는 `duplicate_symbol` 분류로 잡아 Stub Planner에 "이 심볼은 스텁 도구의 교체 방식 필요"로 전달한다 |
 | 실행 | `--gtest_output=json`으로 케이스별 결과와 기대값/실제값을 받는다. `--gtest_filter=Suite.Case`로 케이스 격리. 실행은 임시 작업 디렉터리에서 `test_timeout_sec` 안에 하고, 생성된 코드가 호스트를 건드리지 않도록 "작업 디렉터리 밖 파일·네트워크 접근 금지"를 기본 규칙 md에 둔다 |
-| 크래시 | 새니타이저 리포트 또는 gdb 배치 백트레이스로 크래시 브리프를 만든다(8.3) |
+| 크래시 | 새니타이저 리포트 또는 gdb 배치 백트레이스로 크래시 브리프를 만든다(8.3). 새니타이저는 `-fno-sanitize-recover`로 첫 리포트에서 멈추게 한다. UBSan은 기본으로 계속 실행해 정의되지 않은 동작을 한 케이스가 통과로 끝날 수 있기 때문이다 |
 
 ### 7.6 라인 커버리지 100% 목표
 

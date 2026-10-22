@@ -7,7 +7,7 @@ import pytest
 from conftest import SAMPLE
 from genut.agents.analyzer import Analyzer, AnalyzerOutput, judge_testability
 from genut.agents.base import AgentEnv, AgentError, core_section, fit, load_prompt
-from genut.agents.test_writer import TestWriter, identifier, used_helpers
+from genut.agents.test_writer import TestWriter, identifier
 from genut.analysis.compile_db import CompileDB
 from genut.analysis.extractor import analyze_file
 from genut.analysis.linkscope import GTestLinkContext, judge_calls
@@ -20,7 +20,7 @@ from genut.llm.prompt_builder import REQUIRED, SHRINKABLE, Fragment, PromptBuild
 from genut.llm.provider import TransportError
 from genut.llm.tokens import TokenCounter
 from genut.rules import Rules
-from genut.state import CaseStatus, FunctionState, FunctionStatus, RunState, SharedArea, TestCase, text_hash
+from genut.state import CaseStatus, FunctionState, FunctionStatus, RunState, SharedArea, TestCase, text_hash, used_helpers
 from genut.trace import RunDir, Trace
 
 RULES = Rules(common_text="## 반드시\n- 테스트 이름: test_<함수명>_<상황>\n\n## 커버리지 최소\n- 정상 1, 오류 1, 경계 1")

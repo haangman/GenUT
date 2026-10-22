@@ -1,0 +1,10 @@
+[ RUN      ] RingBufferRbPushTest.test_rb_push_bad_buf
+
+Program received signal SIGSEGV, Segmentation fault.
+__memmove_avx_unaligned_erms () at ../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:314
+314	../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S: No such file or directory.
+#0  __memmove_avx_unaligned_erms () at ../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:314
+#1  0x0000555555556a2b in rb_push (rb=0x7fffffffd9e0, data=0x5555555a1004, len=1) at /work/proj/src/ring_buffer.c:39
+#2  0x0000555555557c11 in RingBufferRbPushTest_test_rb_push_bad_buf_Test::TestBody (this=0x5555555b2eb0) at /work/proj/build-genut/genut-src/ring_buffer_rb_push_test.cc:27
+#3  0x00005555555a0d6e in testing::Test::Run (this=0x5555555b2eb0) at googletest/src/gtest.cc:2690
+#4  0x00005555555a1a2f in main (argc=1, argv=0x7fffffffe0f8) at googletest/src/gtest_main.cc:63

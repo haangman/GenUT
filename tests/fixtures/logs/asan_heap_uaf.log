@@ -1,0 +1,25 @@
+Running main() from googletest/src/gtest_main.cc
+[==========] Running 2 tests from 1 test suite.
+[----------] 2 tests from RingBufferRbPushTest
+[ RUN      ] RingBufferRbPushTest.test_rb_push_ok
+[       OK ] RingBufferRbPushTest.test_rb_push_ok (0 ms)
+[ RUN      ] RingBufferRbPushTest.test_rb_push_after_free
+=================================================================
+==12345==ERROR: AddressSanitizer: heap-use-after-free on address 0x602000000010 at pc 0x55d0c1a2b3c4 bp 0x7ffd1d2e3f40 sp 0x7ffd1d2e3f30
+WRITE of size 1 at 0x602000000010 thread T0
+    #0 0x7f1e2a3b4c5d in __interceptor_memcpy ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:827
+    #1 0x55d0c1a2b3c4 in rb_push /work/proj/src/ring_buffer.c:39
+    #2 0x55d0c1a2c111 in RingBufferRbPushTest_test_rb_push_after_free_Test::TestBody() /work/proj/build-genut/genut-src/ring_buffer_rb_push_test.cc:31
+    #3 0x55d0c1a9d222 in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) (/work/proj/build-genut/genut_ring_buffer_rb_push+0x9d222)
+    #4 0x7f1e2a1c2d3e in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x29d8f)
+
+0x602000000010 is located 0 bytes inside of 8-byte region [0x602000000010,0x602000000018)
+freed by thread T0 here:
+    #0 0x7f1e2a3b9e8f in __interceptor_free ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:52
+    #1 0x55d0c1a2c0ff in RingBufferRbPushTest_test_rb_push_after_free_Test::TestBody() /work/proj/build-genut/genut-src/ring_buffer_rb_push_test.cc:30
+
+SUMMARY: AddressSanitizer: heap-use-after-free /work/proj/src/ring_buffer.c:39 in rb_push
+Shadow bytes around the buggy address:
+  0x0c047fff7fb0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c047fff8000: fa fa[fd]fa fa fa fa fa fa fa fa fa fa fa fa fa
+==12345==ABORTING
