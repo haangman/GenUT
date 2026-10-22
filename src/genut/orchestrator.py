@@ -825,7 +825,7 @@ class Orchestrator:
             "dry_run": self.opts.dry_run,
             "stop_after": self.opts.stop_after,
             "rules_hash": text_hash(self.rules.prompt_block()),
-            "prompts": {a.role: a.prompt.digest() for a in (self.analyzer, self.writer, self.fixer, self.unreachable, self.reviewer)},
+            "prompts": {a.role: a.prompt.digest() for a in (self.analyzer, self.writer, self.fixer, self.unreachable, self.reviewer, self.note_keeper)},
             "started": self.started.isoformat(timespec="seconds"),
             "finished": datetime.now().isoformat(timespec="seconds") if finished else "",
             "stage": self.state.stage,

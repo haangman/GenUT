@@ -330,6 +330,31 @@ def view(
         webbrowser.open(path.as_uri())
 
 
+# ------------------------------------------------------------------- diff
+@app.command()
+def diff(
+    run1: Annotated[str, typer.Argument(help="기준 실행 (ID, latest~N, 경로)")] = "latest~1",
+    run2: Annotated[str, typer.Argument(help="비교할 실행 (ID, latest, 경로)")] = "latest",
+    as_json: Annotated[bool, typer.Option("--json", help="비교 결과를 JSON으로 출력")] = False,
+    home: HomeOpt = None,
+    product: ProductOpt = None,
+) -> None:
+    """두 실행을 비교한다: 바뀐 입력(설정·규칙·프롬프트·대상 함수)과 결과(함수·케이스·빌드·토큰). 생략하면 직전 실행과 최신 실행."""
+    import json
+
+    from genut.rundiff import diff_runs, load_run, render_diff
+    from genut.trace import resolve_run
+
+    try:
+        ctx = make_context(_home(home), product, require_product=True)
+        a = load_run(resolve_run(ctx.runs_root, run1))
+        b = load_run(resolve_run(ctx.runs_root, run2))
+    except (ProductError, FileNotFoundError) as e:
+        _fail(str(e))
+    d = diff_runs(a, b)
+    typer.echo(json.dumps(d, ensure_ascii=False, indent=2) if as_json else render_diff(d))
+
+
 # ----------------------------------------------------------------- replay
 @app.command()
 def replay(

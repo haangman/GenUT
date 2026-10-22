@@ -985,12 +985,14 @@ class StubAdapter(Protocol):
 | `genut gen --file F [--func NAME] [--backend gtest\|kunit] [--out PATH]` | 테스트 생성. 함수를 생략하면 파일의 모든 비static 함수가 대상이다. 테스트 파일은 함수별로 하나씩 만들고 빌드는 소스 파일 단위로 묶는다(7.8). 일부 케이스만 통과해도 통과분으로 파일을 만든다(7.10). 실행 간·프로덕트 간은 순차 처리. 대상 함수의 파일만 새로 쓰며 다른 함수의 파일과 병합하지 않는다 |
 | `genut show <run\|latest>` | 터미널 요약. `latest`는 현재 프로덕트의 최신 실행 |
 | `genut view <run\|latest>` | HTML 뷰어 생성 (단일 파일, 브라우저로 열기) |
-| `genut diff <run1> <run2>` | 두 실행 비교 |
+| `genut diff [<run1> [<run2>]] [--json]` | 두 실행 비교. 생략하면 `latest~1`과 `latest`. **바뀐 입력**(설정 키별 변경, 규칙 md 해시, 역할 프롬프트 해시, provider·모델, 대상 함수 본문 해시)과 **바뀐 결과**(함수 결과·커버리지·최종 확인, 케이스 상태와 상태 경로 `new → fail → pass`, 빌드·토큰·소요 시간, 역할별 LLM 호출 수, 수정한 실패 분류 분포)를 나란히 보여 준다. replay 관계면 함께 표시. 실행 기록만 읽는다 |
 | `genut replay <run> --from <stage>` | 기록된 LLM 응답을 재사용해 특정 단계부터 재실행 |
 | `genut finalize <run>` | 중단되었거나 "미확인"으로 남은 실행의 통과 케이스로 최종 확인만 다시 해서 설치 (LLM 호출 없음, 7.10). 빌드 설정은 지금 설정이 아니라 그 실행의 `run.json`에 기록된 설정(`--set` 포함)을 쓴다 |
 | `genut eval [--corpus PATH] [--label L] [--save-baseline] [--compare R]` | 코퍼스 전체 성공률 측정, HTML 리포트. 코퍼스는 `[[item]] file = ..., function = ...` 형식의 TOML(기본 `products/<이름>/evals/corpus/corpus.toml`, 샘플은 저장소의 `evals/sample_corpus.toml`). 항목마다 생성 실행을 하되 프로덕트 트리에는 설치하지 않는다(측정만). 결과는 `products/<이름>/evals/runs/`에, `--save-baseline`이면 모델별 기준치를 `$GENUT_HOME/evals/baselines/<모델>.json`에 남기고, 다음 평가는 같은 모델의 기준치와 자동으로 비교한다 |
 | `genut product add\|list\|remove` | 프로덕트 등록 관리 (11.5) |
 | `genut knowledge list\|promote\|demote\|edit` | 축적 지식 관리 (11.5) |
+
+실행을 가리킬 때는 실행 ID(앞부분만 줘도 됨), `latest`, `latest~N`(N개 전), 실행 디렉터리 경로를 쓸 수 있습니다. 같은 초에 만든 실행끼리는 실행 디렉터리의 `.seq` 순번으로 순서를 정합니다.
 
 모든 toml 설정은 CLI 플래그로 덮어쓸 수 있습니다: `--candidates 3 --max-iterations 6 --provider openai_compat --log-token-budget 6000`.
 
@@ -1000,6 +1002,7 @@ class StubAdapter(Protocol):
 
 ```
 $GENUT_HOME/products/<이름>/runs/20261022-143012-rb_push/
+├── .seq                 # 같은 초에 만든 실행끼리의 순번 (latest~N 정렬)
 ├── run.json             # 설정 스냅샷, provider/model, 규칙 md 해시, 결과 요약, 시간, 토큰
 ├── trace.jsonl          # 시간순 이벤트: 단계 시작/종료, 에이전트 호출, 도구 호출, 판정, 예산 상태
 ├── analysis.md          # 분석 보고서 (LLM에 들어간 그대로)
@@ -1067,6 +1070,7 @@ flowchart LR
 | 도구 | 쓰임 |
 |---|---|
 | `genut replay <run> --from fix` | 기록된 LLM 응답을 캐시로 써서 LLM 비용 없이 다시 실행. 응답은 역할별로 기록된 순서대로 돌려주고, `--from <단계>`를 주면 그 단계와 뒤 단계의 호출만 실제 LLM을 부른다(수정 호출은 스모크·확장 안에서 일어나도 fix 단계로 기록된다). 설정은 지금 것을 쓰므로 축약기 설정, 분류 규칙, 예산을 바꾼 효과를 바로 확인 |
+| `genut diff <원래 실행> <replay 실행>` | 규칙·분류·예산을 바꾼 replay가 원래 실행과 무엇이 달라졌는지 본다. 바뀐 입력과 케이스별 상태 변화를 함께 보여 준다 |
 | `genut gen --dry-run` | LLM을 부르지 않고 각 단계 프롬프트만 만들어 `prompts/`에 기록. 프롬프트를 눈으로 검토 |
 | `genut gen --stop-after smoke` | 지정 단계 후 멈춤. 중간 산출물 검토 |
 | `genut gen --interactive` | 단계마다 멈추고 사람이 분석 보고서·스텁·후보를 편집한 뒤 계속 |

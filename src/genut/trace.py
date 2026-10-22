@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 SUBDIRS = ("prompts", "stubs", "candidates", "fixes", "crash", "snapshots", "final")
+SEQ_FILE = ".seq"  # 같은 초에 만든 실행끼리의 순번
 
 
 def _safe(label: str) -> str:
@@ -33,7 +34,12 @@ class RunDir:
         while path.exists():
             path = base.with_name(f"{base.name}-{i}")
             i += 1
-        return cls(path)
+        # 같은 초에 만든 실행끼리의 순서 (이름은 라벨 알파벳순이라 순서를 알 수 없다)
+        same = [p for p in runs_root.glob(f"{stamp}-*") if p.is_dir()] if runs_root.exists() else []
+        seq = 1 + max((_seq(p) for p in same), default=0)
+        rd = cls(path)
+        (path / SEQ_FILE).write_text(str(seq), encoding="utf-8")
+        return rd
 
     @property
     def run_id(self) -> str:
@@ -65,19 +71,31 @@ class RunDir:
         return self.write_text(rel, json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
 
+def _seq(run: Path) -> int:
+    try:
+        return int((run / SEQ_FILE).read_text(encoding="utf-8").strip() or 0)
+    except (OSError, ValueError):
+        return 0
+
+
 def find_runs(runs_root: Path) -> list[Path]:
+    """오래된 순. 이름 앞 15자(초 단위 시각)가 같으면 만든 순번(.seq)으로 가른다 (라벨 알파벳순이 되지 않게)."""
     if not runs_root.exists():
         return []
-    return sorted((p for p in runs_root.iterdir() if p.is_dir()), key=lambda p: p.name)
+    return sorted((p for p in runs_root.iterdir() if p.is_dir()), key=lambda p: (p.name[:15], _seq(p), p.name))
 
 
 def resolve_run(runs_root: Path, ref: str) -> Path:
-    """'latest', 실행 ID, 경로 중 하나로 실행 디렉터리를 찾는다. latest는 이 프로덕트 안에서."""
-    if ref == "latest":
+    """'latest', 'latest~N'(N개 전), 실행 ID(앞부분만 줘도 됨), 경로 중 하나로 실행 디렉터리를 찾는다. latest는 이 프로덕트 안에서."""
+    m = re.fullmatch(r"latest(?:~(\d+))?", ref)
+    if m:
         runs = find_runs(runs_root)
+        back = int(m.group(1) or 0)
         if not runs:
             raise FileNotFoundError(f"실행 기록이 없습니다: {runs_root}")
-        return runs[-1]
+        if back >= len(runs):
+            raise FileNotFoundError(f"{ref}: 실행 기록이 {len(runs)}개뿐입니다.")
+        return runs[-1 - back]
     p = Path(ref)
     if p.is_dir():
         return p
