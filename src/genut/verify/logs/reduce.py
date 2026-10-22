@@ -73,3 +73,12 @@ def assemble(parts: list[Part], budget: int, count: Callable[[str], int] = estim
 
 def tail_before(lines: list[str], index: int, n: int = 30) -> str:
     return "\n".join(clean(lines[max(0, index - n) : index]))
+
+
+def reduce_kunit_log(lines: list[str], suite_text: str, failures: str, brief: str, crash_index: int | None, budget: int,
+                     count: Callable[[str], int] = estimate_tokens) -> str:
+    """KUnit 실행 로그의 축약본 (설계 8.2): 우리 스위트 결과 > 실패 상세 > 크래시 브리프 > 크래시 직전 꼬리."""
+    parts = [Part(1, "우리 스위트 결과", suite_text), Part(2, "실패 상세", failures), Part(3, "크래시 브리프", brief)]
+    if crash_index is not None:
+        parts.append(Part(4, "크래시 직전 꼬리", tail_before(lines, crash_index)))
+    return assemble(parts, budget, count)

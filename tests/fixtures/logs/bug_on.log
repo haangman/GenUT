@@ -1,0 +1,14 @@
+[    1.004000]     # Subtest: foo_foo_clamp_test
+[    1.004000]     1..1
+[    1.004200] ------------[ cut here ]------------
+[    1.004200] kernel BUG at drivers/foo/foo.c:7!
+[    1.004200] invalid opcode: 0000 [#1] PREEMPT SMP NOPTI
+[    1.004200] RIP: 0010:foo_clamp+0x51/0x80
+[    1.004200] Call Trace:
+[    1.004200]  <TASK>
+[    1.004200]  ? die+0x36/0x90
+[    1.004200]  ? do_trap+0xe0/0x110
+[    1.004200]  foo_clamp+0x51/0x80
+[    1.004200]  test_foo_clamp_range+0x2d/0x90
+[    1.004200]  kunit_try_run_case+0x7a/0x140
+[    1.004200]  </TASK>

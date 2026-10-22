@@ -128,6 +128,10 @@ class Backend(Protocol):
 
     def install(self, r: Rendered) -> Path: ...
 
+    def finish(self) -> None:
+        """실행이 끝날 때 한 번. 설치하지 않은 작업 파일을 정리한다."""
+        ...
+
 
 @dataclass
 class RunResult:

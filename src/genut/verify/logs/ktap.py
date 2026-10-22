@@ -42,8 +42,11 @@ class KtapSuite:
 
 
 def _observed(block: list[str]) -> list[str]:
+    """실패 블록의 값 줄(`    foo(...) == 0 (0x0)`)에서 값을 모은다. 머리 줄 `Expected a == b, but`은 식이라 뺀다."""
     vals = []
     for line in block[1:]:
+        if line.strip().startswith("Expected "):
+            continue
         m = _VALUE.search(line)
         if m:
             vals.append(m.group("v").strip())

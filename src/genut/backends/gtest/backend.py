@@ -380,6 +380,9 @@ class GTestBackend:
                 return str(comp.parent / name)
         return shutil.which(tool) or tool
 
+    def finish(self) -> None:
+        """gtest는 작업 파일을 전용 빌드 디렉터리에만 쓰므로 정리할 것이 없다."""
+
     # ------------------------------------------------------------ install
     def install(self, r: Rendered) -> Path:
         """최종 파일을 프로덕트 트리에 쓴다. 다른 함수의 파일은 건드리지 않는다 (설계 7.8, 결정 4)."""

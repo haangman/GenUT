@@ -99,7 +99,7 @@ def test_extract_rb_push(rb_analysis):
     types = {t.name: t for t in fn.types}
     assert "struct rb" in types and "size_t head" in types["struct rb"].fields
     assert types["struct rb"].example_init.startswith("struct rb x = { .buf = NULL")
-    assert fn.includes == ['#include "rb.h"']
+    assert fn.includes == ['#include "rb.h"', '#include <stddef.h>']  # 선언 헤더 + 본문이 쓰는 매크로(NULL)를 정의한 헤더
     full_line = _line_of(RB, "stats.full_count++")
     nomem_line = _line_of(RB, "return RB_ENOMEM")
     assert fn.reach(full_line).condition == "(rb_free_space(rb) < len) 참"

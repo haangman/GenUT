@@ -1,0 +1,24 @@
+[    1.003000]     # Subtest: foo_foo_clamp_test
+[    1.003000]     1..2
+[    1.004000] ==================================================================
+[    1.004000] BUG: KASAN: slab-use-after-free in foo_clamp+0x40/0x80
+[    1.004000] Read of size 4 at addr ffff888003e1c010 by task kunit_try_catch/52
+[    1.004000] CPU: 0 PID: 52 Comm: kunit_try_catch Tainted: G    B            N 6.8.0 #1
+[    1.004000] Call Trace:
+[    1.004000]  <TASK>
+[    1.004000]  dump_stack_lvl+0x48/0x70
+[    1.004000]  print_report+0xcf/0x620
+[    1.004000]  kasan_report+0xb0/0xe0
+[    1.004000]  foo_clamp+0x40/0x80
+[    1.004000]  test_foo_clamp_freed+0x31/0x90
+[    1.004000]  kunit_try_run_case+0x7a/0x140
+[    1.004000]  </TASK>
+[    1.004000] Freed by task 52:
+[    1.004000]  kfree+0x9a/0x2a0
+[    1.004000]  test_foo_clamp_freed+0x25/0x90
+[    1.004000] ==================================================================
+[    1.004100]     # test_foo_clamp_freed: EXPECTATION FAILED at lib/kunit/test.c:42
+[    1.004100]     KASAN failure detected
+[    1.004100]     not ok 1 test_foo_clamp_freed
+[    1.005000]     ok 2 test_foo_clamp_inside
+[    1.005000] not ok 1 foo_foo_clamp_test

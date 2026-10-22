@@ -9,7 +9,7 @@ GenUT는 C/C++ 소스 코드를 분석하여 단위 테스트를 자동 생성�
 - 유저 스페이스 코드 대상: **GoogleTest (gtest)** 테스트 생성
 - 리눅스 커널 코드 대상: **KUnit** 테스트 생성
 
-libclang 정적 분석으로 함수 구조를 뽑고, 역할별 LLM 에이전트가 테스트를 쓰고 고치며, 코드가 직접 빌드·실행해 통과한 케이스만 남깁니다. 구현의 기준은 `docs/design.md`이고, 모듈 docstring의 `(설계 7.4)` 같은 표기는 이 문서의 절 번호입니다.
+libclang 정적 분석으로 함수 구조를 뽑고, 역할별 LLM 에이전트가 테스트를 쓰고 고치며, 코드가 직접 빌드·실행해 통과한 케이스만 남깁니다. 구현의 기준은 `docs/design.md`이고, 모듈 docstring의 `(설계 7.4)` 같은 표기는 이 문서의 절 번호입니다. 사용자가 만드는 KUnit 실행 스크립트의 계약은 `docs/kunit-script.md`에 있습니다.
 
 ## 필수 작업 규칙
 
@@ -50,7 +50,7 @@ uv pip install --python .venv -e ".[dev]"
 
 ## 진행 상황
 
-설계 13.1의 14단계 중 1~8단계(스켈레톤, LLM 계층, 분석기, 검증 기반, 규칙·에이전트, gtest 백엔드, 수정 루프 + 관찰 도구, 커버리지 확장)가 구현되었고 다음은 9단계(KUnit 백엔드)다. `genut gen`이 분석 → 스텁 → 사전검증 → 스모크 → 확장 → 수정 → 커버리지 → 최종 확인을 끝까지 돈다. Reviewer 에이전트(⑧)는 10단계, 스텁 어댑터는 11단계로, 지금 스텁은 `NoopStubAdapter`뿐이다. `backends/kunit`에는 `kbuild.py`만 있다(9단계). CLI는 `init`·`doctor`·`product`·`gen`(`--dry-run`, `--stop-after`)·`show`·`view`·`finalize`·`replay`가 있고, `knowledge`는 하위 명령이 비어 있으며 `diff`·`eval`은 아직 없다.
+설계 13.1의 14단계 중 1~9단계(스켈레톤, LLM 계층, 분석기, 검증 기반, 규칙·에이전트, gtest 백엔드, 수정 루프 + 관찰 도구, 커버리지 확장, KUnit 백엔드)가 구현되었고 다음은 10단계(Reviewer + 평가)다. `genut gen`이 gtest와 KUnit 모두에서 분석 → 스텁 → 사전검증 → 스모크 → 확장 → 수정 → 커버리지 → 최종 확인을 끝까지 돈다. Reviewer 에이전트(⑧)는 10단계, 스텁 어댑터는 11단계로, 지금 스텁은 `NoopStubAdapter`뿐이다. 설계와 다른 점: KUnit 최종 확인은 이전 실행의 함수별 파일을 집합 파일에 포함만 하고 다시 검증하지 않는다(설계 7.8은 함께 검증하고 회귀하면 빼라고 함). 실제 커널·QEMU로는 돌려 보지 않았다(가짜 스크립트로 계약만 검증). CLI는 `init`·`doctor`·`product`·`gen`(`--dry-run`, `--stop-after`)·`show`·`view`·`finalize`·`replay`가 있고, `knowledge`는 하위 명령이 비어 있으며 `diff`·`eval`은 아직 없다.
 
 ## 아키텍처
 
@@ -68,6 +68,7 @@ uv pip install --python .venv -e ".[dev]"
 - **커버리지** (`coverage.py`, 오케스트레이터 `_coverage`): 백엔드의 `coverage()`가 빌드 없이 통과 케이스만 다시 실행해 대상 소스의 줄별 실행 횟수를 낸다(gtest: `.gcda`를 지우고 실행 → `gcov --json-format`, llvm-cov: profraw → `llvm-cov export -format=lcov`). `function_coverage`가 대상 함수 줄 범위로 자르고, `reach_conditions`가 미커버 줄마다 가장 가까운 분기 조건·반환값·관련 파라미터·호출(대입된 지역 변수 → 호출한 함수)을 붙인다. 라운드마다 Test Writer `coverage` 모드로 케이스를 받고, `max_coverage_rounds` 뒤에도 남은 줄은 `UnreachableAnalyzer`(프롬프트 `unreachable.md`)가 분류한다. 최종 확인 뒤 설치본 기준으로 다시 잰다.
 - **에이전트** (`agents/`): 모든 호출은 `Agent.call()`을 거친다. 함수당 토큰 예산 확인 → `PromptBuilder`로 한도 맞추기 → `ask_structured` → 실행 기록(`prompts/NN-<label>.md`, `llm_call` 이벤트에 잘린 조각과 프롬프트 해시) → 예산에 토큰 더하기 순이다. 예산 초과나 필수 조각만으로 넘치는 경우에는 LLM을 부르지 않는다. 실패는 모두 `AgentError(kind=...)`로 나온다. 에이전트는 프롬프트 문자열이 아니라 `Fragment` 목록을 만들고, 조립기는 목록 뒤쪽의 SHRINKABLE부터 줄이므로 목록 순서가 곧 축약 순서다. 역할 지시문은 `agents/prompts/<en|ko>/<role>.md`이고 파일 형식은 설계 11.4에 있다. Test Writer 응답은 `merge_cases`가 정리한다(통과 케이스와 같은 이름은 버림, 이름을 C 식별자로, 새 헬퍼는 공유 영역 판을 올려 추가).
 - **백엔드** (`backends/`): 공통 입력·결과 형식은 `base.py`(`TestUnit` → `Rendered` → `BuildResult`/`RunResult`), 스텁 연동 지점은 `stub.py`다. gtest(`backends/gtest/`)는 사용자 CMakeLists를 고치지 않는다. 최상위 `project()` 직후 실행되는 주입 파일(`CMAKE_PROJECT_INCLUDE`)이 최상위 처리 끝에 전용 빌드 디렉터리 안 `genut-src/`의 관리 CMakeLists를 include하고, 그 파일이 테스트 파일을 glob해 파일마다 `genut_<src>_<func>` 타깃을 만든다. 그래서 작업 중에는 프로덕트 트리에 아무것도 쓰지 않고 `install()`만 쓴다. 지연 실행 안에서는 `add_subdirectory`가 금지라 include를 쓴다. `link_targets`가 비면 File API로 찾은 타깃을 테스트별로 `genut_links.cmake`에 둔다. 뼈대(`skeleton.py`)는 C 헤더를 `extern "C"`로 감싸고 fixture + `TEST_F`로 만들며, `LineMap`으로 진단을 케이스에 귀속한다. 빌드 성공 여부는 실행 파일이 새로 생겼는지로 판단하고(빌드 전에 지움), 크래시로 JSON이 없으면 마지막 `[ RUN ]` 케이스를 용의자로 gdb 백트레이스를 받는다.
+- **KUnit 백엔드** (`backends/kunit/`): 빌드·실행은 사용자 스크립트를 계약(`docs/kunit-script.md`, `script.py`)대로 부른다. 사전검증은 `--mode build`, 검증 라운드는 `build()`가 `--mode all` 한 번으로 빌드·실행하고 `run()`은 그 결과를 꺼내 쓴다(QEMU 부팅이 비싸서). 격리는 `--filter` 지원 시 `--mode run`, 아니면 용의자만 담은 파일로 다시 `all`이다. 함수별 파일(`skeleton.py`)이 자기 include를 갖고, 헬퍼는 `static <함수>__<헬퍼>`로 이름을 바꾼다. 의미 검사는 함수별 파일 앞에 집합 파일의 머리(`PRELUDE`)를 붙여 하고 줄을 되돌린다. 등록된 커널 트리 경로에 작업 파일을 쓰므로 `finish()`가 설치하지 않은 파일을 되돌린다(오케스트레이터 `_finish`가 부름). compile DB가 없으면 `.<이름>.o.cmd`로 대신한다(`KernelCompileDB`).
 - 여러 계층이 함께 쓰는 모델(`Diagnostic`, `CrashBrief`, `FailureInfo`, `CaseResult`)은 순환 import를 피하려고 `models.py`에 둔다.
 
 ## 코드 규칙
@@ -82,5 +83,6 @@ uv pip install --python .venv -e ".[dev]"
 
 - 테스트에서 실제 LLM API를 부르지 않는다. 에이전트·구조화 출력은 `FakeProvider`로 검증한다(`responder` 콜백, 태그별 `script`, 둘 다 없으면 스키마를 만족하는 최소 응답). 실제 provider는 가짜 client(Anthropic)나 `httpx.MockTransport`(OpenAI 호환)로 요청 형태만 확인한다. 에이전트 테스트는 `FakeProvider(script={"analyzer": [...], "test_writer": [...]})`처럼 역할 이름(태그)별로 응답을 주고, 실제로 보낸 프롬프트는 `provider.calls`로 확인한다.
 - 오케스트레이터 시나리오는 `tests/fake_backend.py`의 `MarkerBackend`로 돌린다. 케이스 본문의 표지(`FAIL ACTUAL=<값>`, `CRASH`, `TIMEOUT`, `COMPILE_ERROR`, `LINK_ERROR`, `CHECK_ERROR`, `FLAKY`, `FAILS_IN_FINAL`, `USES_HELPER`/`BREAKS_OTHERS`, `COVERS=33,34`)로 빌드·실행·커버리지 결과가 정해진다. 커버리지는 `executable_lines`를 정한 시나리오에서만 돌려준다. 실제 툴체인 e2e는 `tests/integration/test_gen_e2e.py`(CLI `genut gen`부터 설치까지)다.
+- KUnit은 `tests/fixtures/kernel_tree/`(가짜 커널 트리)와 계약을 흉내 내는 가짜 스크립트 `tests/fixtures/kunit/fake_kunit.py`로 시험한다. 툴체인이 필요 없어 단위 테스트로 돈다. 표지는 `COMPILE_ERROR`, `FAIL ACTUAL=<값>`, `CRASH`, `KASAN`, `TIMEOUT`, `COVERS=`, `BOOT_FAIL`이고, `FAKE_KUNIT_CALLS` 환경 변수로 호출 인자를 기록한다.
 - `home` 픽스처는 `GENUT_HOME`을 tmp 경로로 바꾼다. 사용자의 `~/.genut`을 건드리지 않게 이 픽스처나 `--home`을 쓴다.
 - 분석 테스트는 `tests/fixtures/sample_project`(링 버퍼·문자열 유틸 C 프로젝트)와 `sample_db` 픽스처 또는 `write_compile_db()`가 만드는 compile_commands.json을 쓴다. conftest가 `tests/`를 `sys.path`에 넣으므로 헬퍼는 `from conftest import SAMPLE, write_compile_db`처럼 가져온다.

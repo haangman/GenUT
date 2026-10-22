@@ -83,7 +83,9 @@ def make_backend(ctx: AppContext) -> Backend:
         from genut.backends.gtest.backend import GTestBackend
 
         return GTestBackend(ctx.config, ctx.config.product_root())
-    raise StopRun("infra_error", "KUnit 백엔드는 아직 없습니다 (설계 13장 9단계).")
+    from genut.backends.kunit.backend import KUnitBackend
+
+    return KUnitBackend(ctx.config, ctx.config.product_root())
 
 
 class Orchestrator:
@@ -241,7 +243,8 @@ class Orchestrator:
                 usage += "\n이번에 스텁할 수 없는 심볼: " + ", ".join(plan.unsupported)
                 fs.narrowed += [f"{s}: 스텁 도구 연동 필요 — 이 심볼을 거치는 경로는 다루지 않음" for s in plan.unsupported]
             self.stub_usage[fs.name] = usage
-            if fn.is_static and self.stub.name == "noop":
+            include_source = self.cfg.backend == "kunit" and self.cfg.kunit.static_access == "include_source"
+            if fn.is_static and self.stub.name == "noop" and not include_source:
                 fs.status = FunctionStatus.UNTESTABLE
                 fs.status_reason = "static 함수: 테스트에서 부르려면 스텁 도구의 static 접근이 필요합니다 (스텁 도구 연동 필요)"
             stubbed = [s.name for s in plan.symbols]
@@ -747,6 +750,7 @@ class Orchestrator:
                                 self._measure(u, "final/coverage")
                             except Exception as e:  # noqa: BLE001 - 재측정 실패로 마무리를 멈추지 않는다
                                 self._note(f"{u.function}: 최종 커버리지를 재지 못했습니다: {e!r}")
+            self._backend_finish()
             for fs in self.state.functions.values():
                 fs.result = classify_result(fs, self.cfg.coverage.target_line_percent)
             self.state.finished = not self.stopped_after
@@ -758,6 +762,16 @@ class Orchestrator:
             self.trace.say(f"완료 · 빌드 {self.budget.builds_used} · 토큰 {sum(self.budget.tokens.values())} · {self.budget.elapsed():.0f}s → {self.rundir.path}")
         finally:
             self.trace.close()
+
+    def _backend_finish(self) -> None:
+        """백엔드 정리 (KUnit: 설치하지 않은 작업 파일을 커널 트리에서 되돌린다). stop-after면 그대로 둔다."""
+        finish = getattr(self.backend, "finish", None)
+        if finish is None or self.stopped_after:
+            return
+        try:
+            finish()
+        except Exception as e:  # noqa: BLE001
+            self._note(f"백엔드 정리 중 오류: {e!r}")
 
     def _budget_summary(self) -> dict:
         return {"builds_used": self.budget.builds_used, "builds_max": self.cfg.budget.max_builds_per_run,
@@ -794,6 +808,9 @@ def finalize_run(ctx: AppContext, run_path: Path, backend: Backend | None = None
     try:
         trace.event("finalize_start", reserve=reserve)
         final_check(backend, units, state, budget, rundir, ctx.config.finalize.install_unverified, trace)
+        finish = getattr(backend, "finish", None)
+        if finish is not None:
+            finish()
         state.builds_used = base + budget.builds_used
         for fs in state.functions.values():
             fs.result = classify_result(fs, ctx.config.coverage.target_line_percent)

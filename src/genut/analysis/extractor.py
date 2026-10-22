@@ -236,9 +236,9 @@ class _Extractor:
         w = _BodyWalker(self, info)
         w.visit(body, [])
         info.branch_count = len([b for b in info.branches if b.kind != "else"])
-        self._macros(cur, info)
+        macro_headers = self._macros(cur, info)
         self._types(cur, info)
-        self._includes(cur, info)
+        self._includes(cur, info, macro_headers)
         info.preproc = self._preproc(start)
         return info
 
@@ -253,8 +253,10 @@ class _Extractor:
             return c.spelling.replace("const ", "")
         return ""
 
-    def _macros(self, cur, info: FunctionInfo) -> None:  # noqa: ANN001
+    def _macros(self, cur, info: FunctionInfo) -> list[str]:  # noqa: ANN001
+        """함수 본문이 쓰는 매크로 상수와, 그것을 정의한 헤더 (테스트가 같은 상수로 기대값을 쓰므로 include가 필요하다)."""
         K = self.K
+        headers: list[str] = []
         s, e = cur.extent.start.offset, cur.extent.end.offset
         for c in self.tu.cursor.get_children():
             if c.kind != K.MACRO_INSTANTIATION or not self._in_main(c):
@@ -270,6 +272,9 @@ class _Extractor:
                 toks = [t.spelling for t in d.get_tokens()]
                 text = " ".join(toks[1:])[:200] if toks else ""
             info.constants[name] = text or "(매크로)"
+            if d is not None and d.location.file is not None:
+                headers.append(d.location.file.name)
+        return headers
 
     def _types(self, cur, info: FunctionInfo) -> None:  # noqa: ANN001
         seen: set[str] = set()
@@ -333,7 +338,7 @@ class _Extractor:
                     self._add_type(f.type, info, seen, depth + 1)
         info.types.append(td)
 
-    def _includes(self, cur, info: FunctionInfo) -> None:  # noqa: ANN001
+    def _includes(self, cur, info: FunctionInfo, extra: list[str] = ()) -> None:  # noqa: ANN001
         lines: list[str] = []
         canon = cur.canonical
         files = []
@@ -343,6 +348,7 @@ class _Extractor:
             if d.kind == self.K.FUNCTION_DECL:
                 pass
         files += [t.file for t in info.types if t.file]
+        files += list(extra)
         for f in files:
             line = self.include_line(f)
             if line and line not in lines:
