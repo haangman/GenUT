@@ -1,0 +1,76 @@
+GenUT 픽스처: 커널 lib/kunit/assert.c(6.x)의 단정 실패 출력 형식대로 직접 만든 로그다 (실제 커널에서 받은 것이 아님).
+[    2.000000] KTAP version 1
+[    2.000000] 1..1
+[    2.001000]     KTAP version 1
+[    2.001000]     # Subtest: foo_kinds_test
+[    2.001000]     1..16
+[    2.002000]     # test_eq_literal: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:12
+[    2.002000]     Expected foo_clamp(-1, 0, 10) == 1, but
+[    2.002000]         foo_clamp(-1, 0, 10) == 0 (0x0)
+[    2.002000]     not ok 1 test_eq_literal
+[    2.003000]     # test_eq_both: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:18
+[    2.003000]     Expected foo_clamp(11, 0, 10) == hi, but
+[    2.003000]         foo_clamp(11, 0, 10) == 10 (0xa)
+[    2.003000]         hi == 9 (0x9)
+[    2.003000]     not ok 2 test_eq_both
+[    2.004000]     # test_eq_two_calls: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:23
+[    2.004000]     Expected foo_clamp(1, 5, 0) == foo_clamp(0, 5, 0), but
+[    2.004000]         foo_clamp(1, 5, 0) == -22 (0xffffffffffffffea)
+[    2.004000]         foo_clamp(0, 5, 0) == 0 (0x0)
+[    2.004000]     not ok 3 test_eq_two_calls
+[    2.005000]     # test_ne: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:28
+[    2.005000]     Expected foo_clamp(5, 0, 10) != 5, but
+[    2.005000]         foo_clamp(5, 0, 10) == 5 (0x5)
+[    2.005000]     not ok 4 test_ne
+[    2.006000]     # test_lt: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:33
+[    2.006000]     Expected foo_clamp(-1, 0, 10) < 0, but
+[    2.006000]         foo_clamp(-1, 0, 10) == 0 (0x0)
+[    2.006000]     not ok 5 test_lt
+[    2.007000]     # test_true: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:38
+[    2.007000]     Expected foo_ready(dev) to be true, but is false
+[    2.007000]     not ok 6 test_true
+[    2.008000]     # test_false: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:43
+[    2.008000]     Expected foo_busy(dev) to be false, but is true
+[    2.008000]     not ok 7 test_false
+[    2.009000]     # test_not_null: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:48
+[    2.009000]     Expected foo_alloc(test, 8) is not null, but is
+[    2.009000]     not ok 8 test_not_null
+[    2.010000]     # test_not_err: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:53
+[    2.010000]     Expected foo_open(dev) is not error, but is: -12
+[    2.010000]     not ok 9 test_not_err
+[    2.011000]     # test_streq: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:58
+[    2.011000]     Expected foo_name(1) == "empty", but
+[    2.011000]         foo_name(1) == "partial"
+[    2.011000]     not ok 10 test_streq
+[    2.012000]     # test_ptr_eq: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:63
+[    2.012000]     Expected foo_find(dev, 3) == dev->slots[3], but
+[    2.012000]         foo_find(dev, 3) == 0000000000000000
+[    2.012000]         dev->slots[3] == ffff888003a1c000
+[    2.012000]     not ok 11 test_ptr_eq
+[    2.013000]     # test_fail: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:68
+[    2.013000] 레지스터 맵이 비어 있음
+[    2.013000]     not ok 12 test_fail
+[    2.014000]     # test_eq_msg: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:73
+[    2.014000]     Expected foo_clamp(20, 0, 10) == 20, but
+[    2.014000]         foo_clamp(20, 0, 10) == 10 (0xa)
+[    2.014000] 상한 10을 넘음
+[    2.014000]     not ok 13 test_eq_msg
+[    2.015000]     # test_two_failures: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:78
+[    2.015000]     Expected foo_clamp(-1, 0, 10) == 1, but
+[    2.015000]         foo_clamp(-1, 0, 10) == 0 (0x0)
+[    2.015000]     # test_two_failures: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:79
+[    2.015000]     Expected foo_clamp(-2, 0, 10) == 2, but
+[    2.015000]         foo_clamp(-2, 0, 10) == 0 (0x0)
+[    2.015000]     not ok 14 test_two_failures
+[    2.016000]     # test_assert: ASSERTION FAILED at drivers/foo/tests/foo_kinds_test.c:84
+[    2.016000]     Expected foo_init(dev) == 0, but
+[    2.016000]         foo_init(dev) == -19 (0xffffffffffffffed)
+[    2.016000]     not ok 15 test_assert
+[    2.017000]     # test_memeq: EXPECTATION FAILED at drivers/foo/tests/foo_kinds_test.c:89
+[    2.017000]     Expected dev->buf == want, but
+[    2.017000]         dev->buf ==
+[    2.017000]          41  42 <43> 44
+[    2.017000]         want ==
+[    2.017000]          41  42 <45> 44
+[    2.017000]     not ok 16 test_memeq
+[    2.018000] not ok 1 foo_kinds_test

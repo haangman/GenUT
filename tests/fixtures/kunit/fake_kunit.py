@@ -44,6 +44,28 @@ def scan(test_file: Path) -> list[dict]:
     return suites
 
 
+def eq_args(body: str) -> tuple[str, str] | None:
+    """본문의 첫 KUNIT_EXPECT_EQ/ASSERT_EQ(test, L, R)에서 L, R (괄호 안 쉼표는 건너뛴다)."""
+    m = re.search(r"KUNIT_(?:EXPECT|ASSERT)_EQ\(\s*test\s*,", body)
+    if not m:
+        return None
+    args, depth, cur = [], 0, ""
+    for ch in body[m.end():]:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            if depth == 0:
+                args.append(cur.strip())
+                break
+            depth -= 1
+        if ch == "," and depth == 0:
+            args.append(cur.strip())
+            cur = ""
+            continue
+        cur += ch
+    return (args[0], args[1]) if len(args) == 2 else None
+
+
 def ts(n: float) -> str:
     return f"[{n:12.6f}] "
 
@@ -108,9 +130,11 @@ def run(test_file: Path, log: list[str], filter_: str, cov_out: Path | None) -> 
             m = re.search(r"FAIL ACTUAL=(\S+)", body)
             if m:
                 where = os.path.relpath(s["file"]).replace(os.sep, "/")  # 커널 로그처럼 트리 기준 상대 경로 (cwd = 커널 트리)
+                # 커널 lib/kunit/assert.c처럼: 식을 그대로 찍고, 리터럴이 아닌 쪽만 값 줄을 둔다 (오른쪽 값은 모르므로 리터럴로 친다)
+                left, right = eq_args(body) or (f"{s['function']}(...)", "0")
                 log += [ts(t) + f"    # {c}: EXPECTATION FAILED at {where}:12",
-                        ts(t) + f"    Expected {s['function']}(...) == 0, but",
-                        ts(t) + f"        {s['function']}(...) == {m.group(1)} (0x{int(m.group(1)) & 0xffffffff:x})",
+                        ts(t) + f"    Expected {left} == {right}, but",
+                        ts(t) + f"        {left} == {m.group(1)} (0x{int(m.group(1)) & 0xffffffff:x})",
                         ts(t) + f"    not ok {j} {c}"]
                 ok_suite = False
                 continue

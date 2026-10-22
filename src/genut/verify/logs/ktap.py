@@ -10,6 +10,16 @@
     not ok 2 test_b
     # test_c: try timed out
     not ok 3 test_c
+
+단정 실패는 커널 lib/kunit/assert.c가 찍는 형식으로 종류를 가려 한 줄로 요약한다 (gtest와 같은 모양, assertion.py).
+
+    Expected L == R, but / L == 값 (0x..) / R == 값        같지 않음: L [값] ≠ R [값]   (리터럴 쪽은 값 줄이 없음)
+    Expected L < R, but ...                                 비교 실패: L < R 아님 (값 a, b)
+    Expected C to be true, but is false                     참·거짓 불일치: C → false (기대 true)
+    Expected P is not null, but is                          NULL 포인터: P → NULL
+    Expected P is not error, but is: -12                    오류 포인터: P → -12
+    KUNIT_FAIL(test, "메시지")                               KUNIT_FAIL: 메시지
+_MSG 매크로의 메시지는 값 줄 뒤에 오며 ' — 메시지'로 덧붙는다. MEMEQ의 16진 덤프 줄은 요약에서 뺀다.
 """
 
 from __future__ import annotations
@@ -18,6 +28,7 @@ import re
 from dataclasses import dataclass, field
 
 from genut.models import CaseResult
+from genut.verify.logs.assertion import MAX_SUMMARY, Assertion, combine, comparison, equality, short, truth, with_message
 
 _TS = re.compile(r"^\s*\[\s*\d+\.\d+\]\s?")
 _RESULT = re.compile(r"^(?P<indent>\s*)(?P<ok>ok|not ok)\s+(?P<num>\d+)\s*-?\s*(?P<name>[^#\s]+)?(?:\s*#\s*(?P<directive>.*))?$")
@@ -26,6 +37,12 @@ _FAIL = re.compile(r"^\s*#\s*(?P<case>\w+):\s*(?P<kind>EXPECTATION|ASSERTION) FA
 _TIMEOUT = re.compile(r"^\s*#\s*(?P<case>\w+):\s*(?:try timed out|.*timed out)")
 _DIAG = re.compile(r"^\s*#\s*(?P<case>\w+):\s*(?P<msg>.*)$")
 _VALUE = re.compile(r"==\s*(?P<v>.+?)(?:\s*\((?:0x)?[0-9a-fA-F]+\))?\s*$")
+_K_BIN = re.compile(r"^Expected (?P<l>.+?) (?P<op>==|!=|<=|>=|<|>) (?P<r>.+), but$")
+_K_UNARY = re.compile(r"^Expected (?P<c>.+) to be (?P<exp>true|false), but is (?P<act>true|false)$")
+_K_NULL = re.compile(r"^Expected (?P<p>.+) is not null, but is$")
+_K_ERR = re.compile(r"^Expected (?P<p>.+) is not error, but is: (?P<e>-?\d+)$")
+_K_HEX = re.compile(r"^(?:[<>]?[0-9a-fA-F]{2}[<>]?\s*)+$")  # MEMEQ의 16진 덤프 줄
+_HEX_SUFFIX = re.compile(r"\s*\(0x[0-9a-fA-F]+\)$")
 
 
 def strip_timestamps(text: str) -> list[str]:
@@ -51,6 +68,48 @@ def _observed(block: list[str]) -> list[str]:
         if m:
             vals.append(m.group("v").strip())
     return vals
+
+
+def _binary(m: re.Match, rest: list[str]) -> Assertion:
+    left, op, right = m.group("l"), m.group("op"), m.group("r")
+    values: dict[str, str] = {}
+    extra: list[str] = []
+    for line in rest:
+        for side in (left, right):
+            if side not in values and line.startswith(side + " =="):
+                values[side] = _HEX_SUFFIX.sub("", line[len(side) + 3:].strip())  # MEMEQ면 값 없이 "L ==" 뒤에 덤프
+                break
+        else:
+            if not _K_HEX.match(line):
+                extra.append(line)
+    lv, rv = values.get(left, ""), values.get(right, "")
+    if op == "==":
+        return with_message(equality([(left, lv), (right, rv)]), extra)
+    return with_message(comparison(left, op, right, lv or left, rv or right), extra)
+
+
+def describe_kunit(block: list[str]) -> Assertion:
+    """실패 덩어리 하나("# case: EXPECTATION FAILED at ..." 줄 + 본문)를 요약한다. 모르는 형식이면 본문 첫 줄을 쓴다."""
+    body = [x.strip() for x in block[1:] if x.strip()]
+    if not body:
+        return Assertion(short(block[0].strip().lstrip("# ") if block else "", MAX_SUMMARY))
+    first, rest = body[0], body[1:]
+    m = _K_BIN.match(first)
+    if m:
+        return _binary(m, rest)
+    m = _K_UNARY.match(first)
+    if m:
+        return with_message(truth(m.group("c"), m.group("act"), m.group("exp")), rest)
+    m = _K_NULL.match(first)
+    if m:
+        return with_message(Assertion(f"NULL 포인터: {short(m.group('p'))} → NULL (기대: 유효한 포인터)", actual="NULL", observed=["NULL"]), rest)
+    m = _K_ERR.match(first)
+    if m:
+        e = m.group("e")
+        return with_message(Assertion(f"오류 포인터: {short(m.group('p'))} → {e} (기대: 유효한 포인터)", actual=e, observed=[e]), rest)
+    if not first.startswith("Expected "):  # KUNIT_FAIL은 메시지만 찍는다
+        return Assertion(f"KUNIT_FAIL: {short(' '.join(body), 200)}")
+    return Assertion(short(first, MAX_SUMMARY), observed=_observed(block))
 
 
 def parse_ktap(text: str, suites: set[str] | None = None) -> dict[str, KtapSuite]:
@@ -121,13 +180,15 @@ def parse_ktap(text: str, suites: set[str] | None = None) -> dict[str, KtapSuite
             details = "\n".join("\n".join(b) for b in blocks)
             first = blocks[0][0] if blocks else ""
             fm = _FAIL.match(first) if first else None
-            obs = [v for b in blocks for v in _observed(b)]
+            a = combine([describe_kunit(b) for b in blocks]) if blocks else Assertion("try timed out" if status == "timeout" else "")
             current.results[name] = CaseResult(
                 name=name,
                 status=status,
-                message=(first.strip().lstrip("# ") if first else ("try timed out" if status == "timeout" else "")),
+                message=a.summary,
+                expected=a.expected,
+                actual=a.actual,
                 details=details,
-                observed=obs,
+                observed=a.observed,
                 file=fm.group("file") if fm else "",
                 line=int(fm.group("line")) if fm else 0,
             )

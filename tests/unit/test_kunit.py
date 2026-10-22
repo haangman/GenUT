@@ -142,7 +142,8 @@ def test_preflight_build_run_and_coverage(kern, tmp_path):
     assert len(history()) == 2  # 실행은 build의 결과를 꺼내 쓴다
     st = {k: v.status for k, v in rr.results.items()}
     assert st == {"test_foo_clamp_mid": "pass", "test_foo_clamp_low": "fail", "test_foo_clamp_null": "crash", "test_foo_clamp_high": "not_run"}
-    assert rr.results["test_foo_clamp_low"].observed == ["0"]
+    low = rr.results["test_foo_clamp_low"]
+    assert low.observed == ["0"] and low.message == "같지 않음: foo_clamp(-1, 0, 9) [0] ≠ 1" and (low.expected, low.actual) == ("1", "0")
     assert rr.crash.category == "null_deref" and rr.crash.suspect_case == "test_foo_clamp_null" and rr.crash.chain[-1].startswith("foo_clamp")
     reduced = (out / "foo_clamp.run.reduced.md").read_text(encoding="utf-8")
     assert "### 우리 스위트 결과" in reduced and "### 크래시 브리프" in reduced and "RAX:" not in reduced
@@ -310,6 +311,8 @@ def test_kunit_gen_end_to_end(kern, tmp_path):
                                                                                "test_foo_clamp_high", "test_foo_clamp_range")}
     assert "not_run" in [h.status for h in fs.case("test_foo_clamp_high").history]
     assert fs.coverage.percent == 100.0 and fs.result == "complete" and fs.final_check == "ok"
+    lf = fs.case("test_foo_clamp_low").last_failure  # Fixer가 받은 KUnit 단정 실패 요약
+    assert lf.summary == "같지 않음: foo_clamp(-1, 0, 10) [0] ≠ 1" and (lf.expected, lf.actual) == ("1", "0")
     modes = _modes(history)
     assert modes[0] == "build" and set(modes[1:]) == {"all"}  # 사전검증만 build, 나머지는 빌드+실행 한 번
     installed = (tree / "drivers" / "foo" / "tests" / "foo_foo_clamp_test.c").read_text(encoding="utf-8")

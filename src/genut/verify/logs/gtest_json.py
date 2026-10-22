@@ -9,18 +9,17 @@
     오차 초과: |1.5 - 1.0| = 0.5 > 1e-3 (값 1.5, 1)                 EXPECT_NEAR
     FAIL(): 메시지 · 예외: C++ exception ...
 
-기대값·실제값은 어느 쪽인지 확실할 때만 채운다. EXPECT_EQ는 인자 순서에 약속이 없으므로 한쪽에만 호출이 있을 때
-그쪽을 실제값으로 본다. 잘못 채우면 실제값 베끼기 검사(review.copied_actual)가 진짜 베끼기를 놓친다.
+요약 모양과 기대값·실제값을 정하는 규칙은 KUnit과 함께 assertion.py에 있다.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from genut.models import CaseResult
+from genut.verify.logs.assertion import MAX_SUMMARY, Assertion, combine, comparison, equality, short, truth, with_message
 
 _RUN = re.compile(r"^\[ RUN      \] (?P<suite>[\w/]+)\.(?P<case>[\w/]+)")
 _OK = re.compile(r"^\[       OK \] (?P<suite>[\w/]+)\.(?P<case>[\w/]+)")
@@ -33,20 +32,7 @@ _CMP = re.compile(r"^Expected: \((?P<a>.*)\) (?P<op>!=|<=|>=|<|>|==) \((?P<b>.*)
 _NEAR = re.compile(r"^The difference between (?P<a>.+) and (?P<b>.+) is (?P<d>\S+), which exceeds (?P<t>.+), where$")
 _EVAL = re.compile(r"^(?P<e>.+) evaluates to (?P<v>.+?)(?:,| and|,? and|\.)?$")
 _OF_TYPE = re.compile(r"\s*\(of type [^)]*\)$")
-_CALL = re.compile(r"[A-Za-z_]\w*\s*\(")
 _ANY_VALUE = re.compile(r"^\s*(?:Which is|Actual):\s*(.+)$")
-MAX_EXPR = 100
-MAX_SUMMARY = 300
-
-
-@dataclass
-class Assertion:
-    """실패한 단정 하나."""
-
-    summary: str
-    expected: str | None = None
-    actual: str | None = None
-    observed: list[str] = field(default_factory=list)
 
 
 def _utf8(text: str) -> str:
@@ -57,11 +43,6 @@ def _utf8(text: str) -> str:
         return text.encode("latin-1").decode("utf-8")
     except UnicodeDecodeError:
         return text
-
-
-def _short(text: str, n: int = MAX_EXPR) -> str:
-    text = " ".join(text.split())
-    return text if len(text) <= n else text[: n - 1] + "…"
 
 
 def split_failures(msg: str) -> list[str]:
@@ -87,15 +68,7 @@ def _equality(body: list[str]) -> Assertion:
             sides.append([line.strip(), ""])
         elif line.strip():
             extra.append(line.strip())
-    shown = " ≠ ".join(f"{_short(e)} [{_short(v, 40)}]" if v else _short(e) for e, v in sides)
-    summary = f"같지 않음: {shown}" + (f" — {_short(extra[0], 80)}" if extra else "")
-    out = Assertion(summary, observed=[v for _, v in sides if v])
-    calls = [i for i, (e, _) in enumerate(sides) if _CALL.search(e)]
-    if len(sides) == 2 and len(calls) == 1:
-        a, x = sides[calls[0]], sides[1 - calls[0]]
-        out.actual = a[1] or a[0]
-        out.expected = x[1] or x[0]
-    return out
+    return with_message(equality([(e, v) for e, v in sides]), extra)
 
 
 def _value_of(body: list[str]) -> Assertion | None:
@@ -108,8 +81,8 @@ def _value_of(body: list[str]) -> Assertion | None:
         return None
     expr, exp, act = fields["Value of"], fields.get("Expected", ""), _OF_TYPE.sub("", fields["Actual"])
     if exp in ("true", "false"):
-        return Assertion(f"참·거짓 불일치: {_short(expr)} → {act} (기대 {exp})", expected=exp, actual=act, observed=[act])
-    return Assertion(f"조건 불일치: {_short(expr)} → {_short(act, 40)} (기대: {_short(exp, 60)})", expected=exp or None, actual=act, observed=[act])
+        return truth(expr, act, exp)
+    return Assertion(f"조건 불일치: {short(expr)} → {short(act, 40)} (기대: {short(exp, 60)})", expected=exp or None, actual=act, observed=[act])
 
 
 def _near(body: list[str]) -> Assertion | None:
@@ -121,7 +94,7 @@ def _near(body: list[str]) -> Assertion | None:
         e = _EVAL.match(line.strip())
         if e and e.group("e").strip() in (m.group("a"), m.group("b")):
             vals.append(e.group("v").strip())
-    return Assertion(f"오차 초과: |{_short(m.group('a'), 50)} - {_short(m.group('b'), 50)}| = {m.group('d')} > {m.group('t')}"
+    return Assertion(f"오차 초과: |{short(m.group('a'), 50)} - {short(m.group('b'), 50)}| = {m.group('d')} > {m.group('t')}"
                      + (f" (값 {', '.join(vals)})" if vals else ""), observed=vals)
 
 
@@ -132,40 +105,29 @@ def describe_failure(block: str) -> Assertion:
     while body and not body[-1].strip():
         body.pop()
     if not body:
-        return Assertion(_short(lines[0] if lines else "", MAX_SUMMARY))
+        return Assertion(short(lines[0] if lines else "", MAX_SUMMARY))
     first = body[0].strip()
     if first == "Expected equality of these values:":
         return _equality(body)
     m = _CMP.match(first)
     if m:
-        return Assertion(f"비교 실패: {_short(m.group('a'))} {m.group('op')} {_short(m.group('b'))} 아님 (값 {m.group('va')}, {m.group('vb')})",
-                         observed=[m.group("va").strip(), m.group("vb").strip()])
+        return comparison(m.group("a"), m.group("op"), m.group("b"), m.group("va").strip(), m.group("vb").strip())
     for parse in (_value_of, _near):
         a = parse(body)
         if a is not None:
             return a
     if first == "Failed":
         msg = " ".join(x.strip() for x in body[1:] if x.strip())
-        return Assertion(f"FAIL(): {_short(msg, 200)}" if msg else "FAIL()")
+        return Assertion(f"FAIL(): {short(msg, 200)}" if msg else "FAIL()")
     if "exception" in first.lower():
-        return Assertion(f"예외: {_short(first, 200)}")
+        return Assertion(f"예외: {short(first, 200)}")
     # 모르는 형식(다른 gtest 버전 등): 첫 줄을 요약으로, 값처럼 보이는 줄은 관찰값으로
     vals = [m.group(1).strip() for m in (_ANY_VALUE.match(x) for x in body) if m]
-    return Assertion(_short(first, MAX_SUMMARY), observed=[_OF_TYPE.sub("", v) for v in vals])
+    return Assertion(short(first, MAX_SUMMARY), observed=[_OF_TYPE.sub("", v) for v in vals])
 
 
 def summarize(failures: list[str]) -> Assertion:
-    """케이스 하나의 실패들. 요약·기대값·실제값은 첫 실패에서, 관찰값은 모든 실패에서 모은다."""
-    descs = [describe_failure(f) for f in failures if f.strip()]
-    if not descs:
-        return Assertion("")
-    head = descs[0]
-    more = f" 외 {len(descs) - 1}건" if len(descs) > 1 else ""
-    summary = head.summary if len(head.summary) + len(more) <= MAX_SUMMARY else head.summary[: MAX_SUMMARY - len(more) - 1] + "…"
-    observed: list[str] = []
-    for d in descs:
-        observed += [v for v in d.observed if v not in observed]
-    return Assertion(summary + more, head.expected, head.actual, observed)
+    return combine([describe_failure(f) for f in failures if f.strip()])
 
 
 def _result(name: str, status: str, failures: list[str]) -> CaseResult:
