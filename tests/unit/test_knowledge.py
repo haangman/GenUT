@@ -251,7 +251,8 @@ def test_note_keeper_after_run_saves_scoped_notes(world):
     KnowledgeStore(world.home, world.home / "products" / "other", "other").add_note("OTHER 프로덕트의 비밀 노트", "product", "o1", set())
     script = {"test_writer": [_cases(("test_rb_push_ok", OK)), _cases(("test_rb_push_full", FULL_BAD))], "fixer": [FIX], "note_keeper": [NOTES]}
     st, orch, p = _gen(world, script)
-    assert [c["tag"] for c in p.calls][-1] == "note_keeper"
+    assert [c["tag"] for c in p.calls][-1] == "note_keeper" and st.stage != "notes"  # 실행 상태의 단계는 바꾸지 않는다
+    assert [e["stage"] for e in _events(orch, "llm_call") if e["agent"] == "note_keeper"] == ["notes"]
     prompt = p.calls[-1]["messages"][1].content
     assert "## 실행 요약: rb_push" in prompt and "실패 assertion_failed" in prompt and "적용한 전략 fix_case" in prompt
     saved = {n.text: n for n in st.knowledge_notes}

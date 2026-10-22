@@ -121,4 +121,5 @@ def render_summary(run_path: Path) -> str:
     if budget:
         lines.append(f"빌드 {budget.get('builds_used')}/{budget.get('builds_max')} · 소요 {budget.get('elapsed_sec')}s · 토큰 {sum(budget.get('tokens', {}).values())}")
     lines += ["  " + function_line(f) for f in state.functions.values()]
+    lines += [f"  참고: {n}" for n in state.notes]
     return "\n".join(lines)

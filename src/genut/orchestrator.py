@@ -786,7 +786,7 @@ class Orchestrator:
         if (not k.note_keeper or not self.opts.notes or self.opts.dry_run or self.stopped_after or self.state.interrupted
                 or self.ctx.product is None or not has_lessons(self.state, self.fix_log)):
             return
-        self.state.stage = self.env.stage = "notes"
+        self.env.stage = "notes"  # 호출 기록의 단계. 실행 상태의 단계(state.stage)는 마지막 생성 단계로 둔다
         displays = {u.function: u.report.function.display for u in self.units}
         existing = self.knowledge.prompt_block(self.cfg.budget.knowledge_token_budget, self.env.counter)
         try:
@@ -871,6 +871,8 @@ class Orchestrator:
             self._write_run_json(finished=True)
             for fs in self.state.functions.values():
                 self.trace.say(f"[확인] {fs.name}: {fs.result or '-'} · 최종 확인 {fs.final_check or '-'}" + (f" → {fs.installed_path}" if fs.installed_path else ""))
+            for n in self.state.notes:  # 멈춘 이유·경고는 리포트에만 두지 않고 터미널에도 보인다
+                self.trace.say(f"[참고] {n}")
             self.trace.say(f"완료 · 빌드 {self.budget.builds_used} · 토큰 {sum(self.budget.tokens.values())} · {self.budget.elapsed():.0f}s → {self.rundir.path}")
         finally:
             self.trace.close()

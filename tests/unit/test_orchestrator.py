@@ -14,6 +14,7 @@ from genut.orchestrator import GenOptions, Orchestrator, finalize_run
 from genut.paths import ensure_home_layout
 from genut.products import add_product
 from genut.replay import ReplayProvider, replay_run
+from genut.report import render_summary
 from genut.state import CaseStatus, FunctionStatus
 from genut.viewer.render import render_run, write_view
 
@@ -251,6 +252,9 @@ def test_unknown_function_and_preflight_failure_stop(world):
     world.be.preflight_ok = False
     st, orch, p = run(world)
     assert orch.error == "infra_error" and [c["tag"] for c in p.calls] == ["analyzer"] and "뼈대 빌드 실패" in st.notes[-1]
+    said = [e["text"] for e in events(orch, "message")]
+    assert said[-2].startswith("[참고] infra_error:") and "뼈대 빌드 실패" in said[-2]  # 멈춘 이유를 터미널에도 보인다
+    assert "참고: infra_error:" in render_summary(orch.rundir.path)
 
 
 def test_dry_run_records_prompts_only(world):
