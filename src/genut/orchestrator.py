@@ -80,6 +80,17 @@ class GenOptions:
     install: bool = True  # False면 최종 확인까지 하되 프로덕트 트리에 쓰지 않는다 (genut eval)
 
 
+def cpp_blocker(fn, stub: str = "noop") -> str:  # noqa: ANN001 - FunctionInfo
+    """C++ 멤버 함수를 지금 다룰 수 없는 이유 (설계 13장 12단계). 다룰 수 있으면 빈 문자열."""
+    if fn.is_method and fn.access in ("private", "protected") and stub == "noop":
+        return f"{fn.access} 멤버 함수: 테스트에서 부를 수 없습니다 (스텁 도구 연동 또는 friend 선언 필요)"
+    if fn.is_template or (fn.owner is not None and fn.owner.template):
+        return "템플릿: 인스턴스화할 타입을 정할 수 없어 아직 다루지 않습니다"
+    if fn.is_method and not fn.is_static_method and fn.owner is not None and fn.owner.abstract:
+        return "추상 클래스의 멤버 함수: 구현 클래스가 필요해 아직 다루지 않습니다"
+    return ""
+
+
 def make_backend(ctx: AppContext) -> Backend:
     if ctx.config.backend == "gtest":
         from genut.backends.gtest.backend import GTestBackend
@@ -201,33 +212,38 @@ class Orchestrator:
                           resource_dir=self.cfg.analysis.resource_dir)
         if fa.errors:
             self._note("분석 중 파싱 오류: " + "; ".join(fa.errors[:3]))
-        names = self.opts.functions or [f.name for f in fa.functions if not f.is_static]
-        missing = [n for n in names if fa.get(n) is None]
-        if missing:
-            raise StopRun("input_error", f"{self.source.name}에서 함수를 찾지 못했습니다: {', '.join(missing)}")
-        for name in names:
-            fn = fa.get(name)
+        picked = []
+        if self.opts.functions:  # 이름, Class::method, 완전한 이름, 키. 오버로드면 모두
+            missing = [n for n in self.opts.functions if not fa.select(n)]
+            if missing:
+                raise StopRun("input_error", f"{self.source.name}에서 함수를 찾지 못했습니다: {', '.join(missing)}")
+            for n in self.opts.functions:
+                picked += [f for f in fa.select(n) if f not in picked]
+        else:  # 파일의 모든 비static 함수와 공개 멤버 함수 (생성자는 --func로 고를 때만)
+            picked = [f for f in fa.functions if not f.is_static and not f.is_constructor and f.access in ("", "public")]
+        for fn in picked:
+            key = fn.key or fn.name
             report = AnalysisReport(function=fn, compile_args=fa.args, parse_errors=fa.errors, dropped_flags=fa.dropped_flags)
-            fs = FunctionState(name=fn.name, signature=fn.signature, start_line=fn.start_line, end_line=fn.end_line)
+            fs = FunctionState(name=key, signature=fn.signature, start_line=fn.start_line, end_line=fn.end_line)
             self.units.append(TestUnit(source=self.source, report=report, state=fs))
-            self.state.functions[fn.name] = fs
+            self.state.functions[key] = fs
         self.backend.configure(self.units)  # gtest: link_targets가 비면 테스트별 링크 타깃을 찾는다
         scopes = {}
         for u in self.units:
             fn = u.report.function
             u.report.linkscope = judge_calls(fn, self.source, self.cfg.backend, self.rules, self.backend.link_context(u))
-            scopes[fn.name] = [j.model_dump(mode="json") for j in u.report.linkscope]
-            self.rundir.write_text(f"analysis/{fn.name}.md", render_analysis(u.report))
-            self.rundir.write_text(f"analysis/{fn.name}.json", u.report.model_dump_json(indent=1))
+            scopes[u.function] = [j.model_dump(mode="json") for j in u.report.linkscope]
+            self.rundir.write_text(f"analysis/{u.function}.md", render_analysis(u.report))
+            self.rundir.write_text(f"analysis/{u.function}.json", u.report.model_dump_json(indent=1))
             calls = len(u.report.linkscope)
             stubs = u.report.stub_required()
             self._say("analyze", f"{fn.signature} · 호출 {calls}개 · 스텁 필요 {len(stubs)}개" + (f" ({', '.join(stubs)})" if stubs else ""))
             try:
                 verdict = self.analyzer.run(u.report, u.state)
                 if verdict.warning:
-                    self._note(f"{fn.name}: {verdict.warning}")
+                    self._note(f"{u.function}: {verdict.warning}")
                 if not verdict.testable:
-                    self._say("analyze", f"{fn.name}: 테스트 불가 — {verdict.reason}")
+                    self._say("analyze", f"{u.function}: 테스트 불가 — {verdict.reason}")
             except AgentError as e:
                 self._agent_error(e, u, "분석")
         self.rundir.write_json("linkscope.json", scopes)
@@ -250,6 +266,8 @@ class Orchestrator:
             if fn.is_static and self.stub.name == "noop" and not include_source:
                 fs.status = FunctionStatus.UNTESTABLE
                 fs.status_reason = "static 함수: 테스트에서 부르려면 스텁 도구의 static 접근이 필요합니다 (스텁 도구 연동 필요)"
+            elif blocker := cpp_blocker(fn, self.stub.name):
+                fs.status, fs.status_reason = FunctionStatus.UNTESTABLE, blocker
             stubbed = [s.name for s in plan.symbols]
             self._say("stub", f"{fs.name}: 스텁 {len(stubbed)}개" + (f" ({', '.join(stubbed)})" if stubbed else "") + (f" · 스텁 불가 {', '.join(plan.unsupported)}" if plan.unsupported else ""))
 
@@ -577,7 +595,9 @@ class Orchestrator:
     def _passed(self, u: TestUnit, c: TestCase, stage: str) -> None:
         """통과 즉시 코드 리뷰 검사(7.9)를 거친다."""
         fs = u.state
-        findings = review_case(c, fs.name, fs.shared.helpers, self.rules)
+        fn = u.report.function
+        target = fn.owner.name if fn.is_constructor and fn.owner else fn.name
+        findings = review_case(c, target, fs.shared.helpers, self.rules, member=fn.is_method, constructor=fn.is_constructor)
         copied = [f for f in findings if f.check == "copied_actual"]
         others = [f for f in findings if f.check != "copied_actual"]
         if copied and not justified(c.fix_evidence, [p.line for p in u.report.function.returns]):

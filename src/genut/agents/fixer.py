@@ -81,7 +81,7 @@ class Fixer(Agent[FixerOutput]):
         fi = case.last_failure or FailureInfo(category="unknown", stage="run")
         hint = self._hint(fi)
         values = self.values(
-            fn.name, case=case.name, category=fi.category, hint=hint, allowed=", ".join(allowed),
+            fn.display, function_id=fs.name, case=case.name, category=fi.category, hint=hint, allowed=", ".join(allowed),
             shared_rule=self.prompt.render("shared_blocked", {}) if case.shared_change_blocked else "",
         )
         frags = self.base_fragments(values)
@@ -103,7 +103,7 @@ class Fixer(Agent[FixerOutput]):
             if ex:
                 frags.append(Fragment("fix_examples", _examples(ex), SHRINKABLE, title="같은 분류의 과거 수정 사례",
                                       shrinkers=[lambda: _examples(ex[:1]), lambda: ""]))
-            bugs = knowledge.suspected_bugs(fn.name, text_hash(fn.source))
+            bugs = knowledge.suspected_bugs(fs.name, text_hash(fn.source))
             if bugs:
                 frags.append(Fragment("suspected_bugs", "\n".join(f"- {b['case']}: {b['reason']}" for b in bugs), SHRINKABLE,
                                       title="이전 실행의 소스 버그 의심", shrinkers=[lambda: ""]))

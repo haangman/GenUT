@@ -11,7 +11,7 @@ How your output is used:
 5. Do not write #include lines, test registration or a main function.
 6. When several cases need the same setup, put it in a helper (a complete function definition) and call it. Never redefine an existing helper.
 7. Never repeat or modify a case that is already passing.
-8. Name each case test_${function}_<situation> and write purpose as one Korean sentence.
+8. Name each case test_${function_id}_<situation> and write purpose as one Korean sentence.
 
 ## smoke
 Write exactly one test case: the simplest normal-path call of `$function` that checks its return value or main effect. Do not test error paths yet.

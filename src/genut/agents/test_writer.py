@@ -110,7 +110,7 @@ class TestWriter(Agent[TestWriterOutput]):
         cfg, counter = self.env.config, self.env.counter
         fn = report.function
         existing = ", ".join(c.name for c in fs.cases) or "(없음)"
-        values = self.values(fn.name, existing=existing)
+        values = self.values(fn.display, function_id=fs.name, existing=existing)
         frags = self.base_fragments(values)
         frags += fit(report_fragments(report), cfg.budget.analysis_token_budget, counter)
         if fs.cautions or fs.recommended:
@@ -130,7 +130,7 @@ class TestWriter(Agent[TestWriterOutput]):
             frags.append(Fragment("dropped", "\n".join(f"- {c.name}: {c.drop_reason}" for c in dropped), SHRINKABLE,
                                   title="제거된 케이스와 사유 (같은 시도를 반복하지 말 것)", shrinkers=[lambda: ""]))
         if knowledge is not None:
-            bugs = knowledge.suspected_bugs(fn.name, text_hash(fn.source))
+            bugs = knowledge.suspected_bugs(fs.name, text_hash(fn.source))
             if bugs:
                 frags.append(Fragment("suspected_bugs", "\n".join(f"- {b['case']}: {b['reason']}" for b in bugs), SHRINKABLE,
                                       title="이전 실행에서 소스 버그 의심으로 제외된 케이스 (다시 시도하지 말 것)", shrinkers=[lambda: ""]))

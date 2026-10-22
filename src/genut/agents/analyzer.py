@@ -66,7 +66,8 @@ class Analyzer(Agent[AnalyzerOutput]):
     output = AnalyzerOutput
 
     def fragments(self, report: AnalysisReport) -> list[Fragment]:
-        values = self.values(report.function.name)
+        fn = report.function
+        values = self.values(fn.display, function_id=fn.key or fn.name)
         analysis = fit(report_fragments(report), self.env.config.budget.analysis_token_budget, self.env.counter)
         return self.base_fragments(values) + analysis + [self.task_fragment("task", values)]
 
@@ -74,7 +75,7 @@ class Analyzer(Agent[AnalyzerOutput]):
         """분석 결과를 fs(주의 사항, 추천 케이스, 상태, 토큰)에 반영하고 판정을 돌려준다."""
         fn = report.function
         try:
-            res = self.call(self.fragments(report), function=fn.name)
+            res = self.call(self.fragments(report), function=fs.name)
         except AgentError as e:
             fs.tokens_used += e.usage.total
             raise
@@ -85,7 +86,7 @@ class Analyzer(Agent[AnalyzerOutput]):
         if not verdict.testable:
             fs.status = FunctionStatus.UNTESTABLE
             fs.status_reason = verdict.reason
-        self._event("testability", fn.name, testable=verdict.testable, reason=verdict.reason, warning=verdict.warning)
+        self._event("testability", fs.name, testable=verdict.testable, reason=verdict.reason, warning=verdict.warning)
         return verdict
 
 
@@ -107,7 +108,7 @@ class UnreachableAnalyzer(Agent[UnreachableOutput]):
     output = UnreachableOutput
 
     def classify(self, report: AnalysisReport, fs: FunctionState, uncovered: str, lines: list[int], stub_usage: str = "") -> list[UnreachableLine]:
-        values = self.values(report.function.name)
+        values = self.values(report.function.display, function_id=fs.name)
         frags = self.base_fragments(values)
         frags += fit(report_fragments(report), self.env.config.budget.analysis_token_budget, self.env.counter)
         frags.append(Fragment("uncovered", uncovered, REQUIRED, title="미커버 줄과 도달 조건"))

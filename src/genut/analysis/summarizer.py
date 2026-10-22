@@ -18,13 +18,44 @@ def _target(r: AnalysisReport) -> str:
     if fn.is_inline:
         flags.append("inline")
     if fn.is_method:
-        flags.append(f"{'static ' if fn.is_static_method else ''}멤버 함수 of {fn.class_name}")
+        kind = "생성자" if fn.is_constructor else ("static 멤버 함수" if fn.is_static_method else ("const 멤버 함수" if fn.is_const else "멤버 함수"))
+        flags.append(f"{fn.access + ' ' if fn.access else ''}{kind} of {fn.owner.qualified_name if fn.owner else fn.class_name}")
     if fn.namespace:
         flags.append(f"namespace {fn.namespace}")
     flags.append(f"{fn.line_count}줄 · 분기 {fn.branch_count}")
     out = [f"{fn.signature}   @ {fn.file}:{fn.start_line}-{fn.end_line}", " · ".join(flags)]
     if fn.preproc:
         out.append("빌드 조건: " + " && ".join(fn.preproc))
+    return "\n".join(out)
+
+
+def call_hint(fn: FunctionInfo) -> str:
+    """테스트에서 대상을 부르는 방법 (C++). C 함수면 빈 문자열."""
+    if fn.is_method and fn.owner is not None:
+        cls = fn.owner.qualified_name
+        if fn.is_constructor:
+            return f"`{fn.display}`는 {cls}의 생성자다. 케이스 안에서 이 생성자로 객체를 만들고, 공개 멤버 함수로 만들어진 상태를 확인한다."
+        if fn.is_static_method:
+            return f"`{fn.display}`는 {cls}의 static 멤버 함수다. 객체 없이 `{cls}::{fn.name}(...)`로 부른다."
+        if fn.fixture_object:
+            return (f"`{fn.display}`는 {cls}의 인스턴스 멤버 함수다. fixture가 기본 생성한 객체 `obj`를 준다(`obj.{fn.name}(...)`). "
+                    "다른 생성자나 상태가 필요하면 케이스 안에서 공개 생성자와 공개 멤버 함수로 만든다. 비공개 멤버 변수는 직접 건드리지 않는다.")
+        return f"`{fn.display}`는 {cls}의 인스턴스 멤버 함수다. 케이스 안에서 공개 생성자로 객체를 만든 뒤 `<객체>.{fn.name}(...)`로 부른다."
+    if fn.namespace:
+        return f"`{fn.name}`는 namespace {fn.namespace} 안에 있다. `{fn.namespace}::{fn.name}(...)`로 부른다."
+    return ""
+
+
+def _class(fn: FunctionInfo, brief: bool) -> str:
+    o = fn.owner
+    if o is None:
+        return ""
+    traits = ["기본 생성 가능" if o.default_constructible else "기본 생성자 없음"] + (["추상 클래스"] if o.abstract else [])
+    out = [f"{o.kind} {o.qualified_name}   @ {o.file}:{o.line}   ({', '.join(traits)})",
+           "공개 생성자: " + (" · ".join(o.constructors) or "(선언 없음: 암묵적 기본 생성자)"),
+           "공개 멤버 함수: " + (" · ".join(o.methods) or "(없음)")]
+    if not brief and o.fields:
+        out.append("멤버 변수: " + " · ".join(o.fields))
     return "\n".join(out)
 
 
@@ -86,6 +117,8 @@ def report_fragments(r: AnalysisReport) -> list[Fragment]:
     fn = r.function
     frags = [
         Fragment("analysis.target", _target(r), REQUIRED, title="대상"),
+        Fragment("analysis.call", call_hint(fn), REQUIRED, title="호출 방법"),
+        Fragment("analysis.class", _class(fn, False), SHRINKABLE, title="클래스", shrinkers=[lambda: _class(fn, True)]),
         Fragment("analysis.source", numbered_source(fn), REQUIRED, title="소스 (줄 번호 포함)"),
         Fragment("analysis.returns", _returns(fn), REQUIRED, title="반환 지점"),
         Fragment("analysis.calls", _calls(r), REQUIRED, title="호출과 링크 범위"),
@@ -105,7 +138,7 @@ def report_fragments(r: AnalysisReport) -> list[Fragment]:
 
 def render_report(r: AnalysisReport) -> str:
     """analysis.md: LLM에 들어가는 것과 같은 내용 + 판정 근거."""
-    parts = [f"# 분석 보고서: {r.function.name}", ""]
+    parts = [f"# 분석 보고서: {r.function.display}", ""]
     for f in report_fragments(r):
         if f.text:
             parts += [f"## {f.title}", "", "```", f.text, "```", ""]

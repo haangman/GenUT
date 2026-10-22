@@ -144,7 +144,7 @@ def show(run: Annotated[str, typer.Argument(help="실행 ID 또는 latest")] = "
 @app.command()
 def gen(
     file: Annotated[Path, typer.Option("--file", "-f", help="대상 소스 파일")],
-    func: Annotated[Optional[list[str]], typer.Option("--func", help="대상 함수 (여러 번 줄 수 있음. 생략하면 모든 비static 함수)")] = None,
+    func: Annotated[Optional[list[str]], typer.Option("--func", help="대상 함수: 이름, Class::method, 완전한 이름 (여러 번 줄 수 있음. 생략하면 모든 비static 함수와 공개 멤버 함수)")] = None,
     backend: Annotated[Optional[str], typer.Option("--backend", help="gtest | kunit (생략하면 프로덕트 설정)")] = None,
     out: Annotated[Optional[Path], typer.Option("--out", help="함수별 테스트 파일을 쓸 위치 (gtest output_dir 덮어쓰기)")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="LLM·빌드 없이 각 단계 프롬프트만 만들어 기록")] = False,

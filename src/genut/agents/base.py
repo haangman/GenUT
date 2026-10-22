@@ -149,8 +149,10 @@ class Agent(Generic[T]):
 
     # ---------------------------------------------------------- fragments
     def values(self, function: str, **extra: str) -> dict[str, str]:
+        """$function: 사람이 읽는 이름(Class::method), $function_id: 테스트 이름에 쓰는 식별자(Class_method)."""
         b = self.env.config.backend
-        return {"function": function, "backend": b, "framework": FRAMEWORK[b], "language": LANGUAGE[b], "wrapper": WRAPPER[b], **extra}
+        ident = re.sub(r"\W+", "_", function).strip("_")
+        return {"function": function, "function_id": ident, "backend": b, "framework": FRAMEWORK[b], "language": LANGUAGE[b], "wrapper": WRAPPER[b], **extra}
 
     def base_fragments(self, values: dict[str, str]) -> list[Fragment]:
         frags = [Fragment("role", self.prompt.render(None, values), REQUIRED, target="system")]

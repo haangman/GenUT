@@ -58,7 +58,7 @@ def render(unit: TestUnit, file_name: str, cases: list[TestCase] | None = None) 
         for item in items:
             lines.extend(item.split("\n"))
 
-    add(f"// GenUT가 생성한 테스트입니다: {unit.function} ({unit.source.name}). 직접 고치면 다음 생성 때 덮어씁니다.",
+    add(f"// GenUT가 생성한 테스트입니다: {fn.display} ({unit.source.name}). 직접 고치면 다음 생성 때 덮어씁니다.",
         "#include <gtest/gtest.h>")
     if globs:
         add("#include <cstring>")
@@ -74,7 +74,10 @@ def render(unit: TestUnit, file_name: str, cases: list[TestCase] | None = None) 
         if name in helpers:
             add("", shared.helpers[name].strip())
 
-    add("", f"class {suite} : public ::testing::Test {{", " protected:", "  void SetUp() override {")
+    add("", f"class {suite} : public ::testing::Test {{", " protected:")
+    if fn.fixture_object:  # 인스턴스 멤버 함수: 기본 생성한 대상 객체. 케이스마다 fixture가 새로 만들어진다
+        add(f"  {fn.fixture_object} obj;")
+    add("  void SetUp() override {")
     for g in globs:
         add(f"    std::memcpy(genut_saved_{g.name}, &{g.name}, sizeof({g.name}));")
     if shared.setup_code.strip():
@@ -97,5 +100,5 @@ def render(unit: TestUnit, file_name: str, cases: list[TestCase] | None = None) 
         lm.function_names[f"{suite}_{c.name}_Test"] = c.name
     return Rendered(
         function=unit.function, file_name=file_name, text="\n".join(lines) + "\n", line_map=lm,
-        cases=[c.name for c in cases], suite=suite, source=unit.source,
+        cases=[c.name for c in cases], suite=suite, source=unit.source, symbol=fn.qualified_name or fn.name,
     )

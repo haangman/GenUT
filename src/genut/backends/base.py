@@ -52,6 +52,7 @@ class Rendered:
     cases: list[str]
     suite: str = ""
     source: Path | None = None  # 대상 소스
+    symbol: str = ""  # 대상의 완전한 이름 (C++ 멤버 함수면 ns::Class::method). 크래시 프레임을 우리 코드로 알아보는 데 쓴다
 
 
 @dataclass

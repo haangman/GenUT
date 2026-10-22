@@ -13,7 +13,7 @@ from pathlib import Path
 
 from genut.analysis.compile_db import CompileEntry, builtin_include_args, compiler_target, guess_target
 from genut.analysis.flag_sanitizer import FlagSanitizer
-from genut.analysis.model import Branch, CallSite, FunctionInfo, GlobalRef, ParamInfo, ReturnPoint, TypeDef
+from genut.analysis.model import Branch, CallSite, ClassInfo, FunctionInfo, GlobalRef, ParamInfo, ReturnPoint, TypeDef
 from genut.analysis.parser import ParseResult, parse
 
 _FN_KINDS = ("FUNCTION_DECL", "CXX_METHOD", "FUNCTION_TEMPLATE", "CONSTRUCTOR")
@@ -62,8 +62,13 @@ class FileAnalysis:
     dropped_flags: list[str] = field(default_factory=list)
     learned_flags: list[str] = field(default_factory=list)
 
+    def select(self, name: str) -> list[FunctionInfo]:
+        """키, 이름, Class::method, 완전한 이름 중 하나로 고른다. 오버로드면 모두."""
+        return [f for f in self.functions if name in (f.key, f.name, f.display, f.qualified_name)]
+
     def get(self, name: str) -> FunctionInfo | None:
-        return next((f for f in self.functions if f.name == name or f.qualified_name == name), None)
+        hits = self.select(name)
+        return hits[0] if hits else None
 
     @property
     def errors(self) -> list[str]:
@@ -121,6 +126,7 @@ class _Extractor:
         self.max_fields = max_fields
         self.srcs = _Sources()
         self.include_dirs = self._include_dirs(args)
+        self._classes: dict[str, ClassInfo] = {}
 
     # ------------------------------------------------------------ helpers
     @staticmethod
@@ -173,7 +179,61 @@ class _Extractor:
             info = self._function(c)
             if info is not None:
                 out.append(info)
+        seen: dict[str, int] = {}
+        for f in out:  # 실행 안의 식별자: Class_method, 오버로드는 _2, _3 (파일·스위트·상태 이름에 쓴다)
+            base = re.sub(r"\W+", "_", f"{f.class_name}_{f.name}" if f.is_method and f.class_name else f.name)
+            seen[base] = seen.get(base, 0) + 1
+            f.key = base if seen[base] == 1 else f"{base}_{seen[base]}"
         return out
+
+    def _class_info(self, cls) -> ClassInfo:  # noqa: ANN001
+        """멤버 함수의 소속 클래스: 공개 생성자, 멤버 변수, 공개 멤버 함수, 기본 생성 가능 여부."""
+        K, A = self.K, self.ci.AccessSpecifier
+        key = cls.get_usr() or cls.spelling
+        if key in self._classes:
+            return self._classes[key]
+        d = cls.get_definition() or cls
+
+        def access(c) -> str:  # noqa: ANN001
+            try:
+                return {A.PUBLIC: "public", A.PROTECTED: "protected", A.PRIVATE: "private"}.get(c.access_specifier, "")
+            except ValueError:
+                return ""
+
+        def params(c) -> str:  # noqa: ANN001
+            return ", ".join(f"{a.type.spelling} {a.spelling}".strip() for a in c.get_arguments())
+
+        ctors, fields, methods, has_ctor, default = [], [], [], False, False
+        for c in d.get_children():
+            if c.kind == K.CONSTRUCTOR:
+                has_ctor = True
+                if access(c) == "public" and not c.is_deleted_method():
+                    ctors.append(f"{c.spelling}({params(c)})")
+                    default = default or not list(c.get_arguments()) or c.is_default_constructor()
+            elif c.kind == K.FIELD_DECL:
+                fields.append(f"{c.type.spelling} {c.spelling} ({access(c)})")
+            elif c.kind in (K.CXX_METHOD, K.FUNCTION_TEMPLATE) and access(c) == "public":
+                head = "static " if c.is_static_method() else ""
+                tail = " const" if c.is_const_method() else ""
+                methods.append(f"{head}{c.result_type.spelling} {c.spelling}({params(c)}){tail}")
+        try:
+            abstract = d.is_abstract_record()
+        except AttributeError:
+            abstract = False
+        parts = []
+        p = d
+        while p is not None and p.kind != K.TRANSLATION_UNIT:
+            if p.kind in (K.NAMESPACE, K.CLASS_DECL, K.STRUCT_DECL, K.CLASS_TEMPLATE):
+                parts.append(p.spelling)
+            p = p.semantic_parent
+        info = ClassInfo(
+            name=d.spelling, qualified_name="::".join(reversed(parts)), kind="struct" if d.kind == K.STRUCT_DECL else "class",
+            file=d.location.file.name if d.location.file else "", line=d.location.line, constructors=ctors,
+            default_constructible=default or not has_ctor, abstract=abstract, template=d.kind == K.CLASS_TEMPLATE,
+            fields=fields[: self.max_fields], methods=methods,
+        )
+        self._classes[key] = info
+        return info
 
     def _walk_decls(self, node):  # noqa: ANN001, ANN202
         K = self.K
@@ -199,17 +259,24 @@ class _Extractor:
             ParamInfo(name=a.spelling, type=a.type.spelling, canonical=a.type.get_canonical().spelling, record=self._record_name(a.type))
             for a in cur.get_arguments()
         ]
-        ns, cls = [], ""
+        ns, cls, cls_cursor = [], "", None
         p = cur.semantic_parent
         while p is not None and p.kind != K.TRANSLATION_UNIT:
             if p.kind in (K.CLASS_DECL, K.STRUCT_DECL, K.CLASS_TEMPLATE) and not cls:
-                cls = p.spelling
+                cls, cls_cursor = p.spelling, p
             elif p.kind == K.NAMESPACE:
                 ns.append(p.spelling)
             p = p.semantic_parent
         namespace = "::".join(reversed(ns))
         qualified = "::".join(x for x in (namespace, cls, cur.spelling) if x)
-        is_method = cur.kind == K.CXX_METHOD
+        is_method = cur.kind in (K.CXX_METHOD, K.CONSTRUCTOR) or (cur.kind == K.FUNCTION_TEMPLATE and cls_cursor is not None)
+        acc = ""
+        if is_method:
+            try:
+                acc = {ci.AccessSpecifier.PUBLIC: "public", ci.AccessSpecifier.PROTECTED: "protected",
+                       ci.AccessSpecifier.PRIVATE: "private"}.get(cur.canonical.access_specifier, "")
+            except ValueError:
+                acc = ""
         info = FunctionInfo(
             name=cur.spelling,
             qualified_name=qualified,
@@ -223,10 +290,14 @@ class _Extractor:
             is_static=cur.storage_class == ci.StorageClass.STATIC and not is_method,
             is_inline=bool(re.search(r"\binline\b", head)),
             is_method=is_method,
-            is_static_method=is_method and cur.is_static_method(),
+            is_static_method=is_method and cur.kind != K.CONSTRUCTOR and cur.is_static_method(),
             is_template=cur.kind == K.FUNCTION_TEMPLATE,
             class_name=cls,
             namespace=namespace,
+            access=acc,
+            is_const=cur.kind == K.CXX_METHOD and cur.is_const_method(),
+            is_constructor=cur.kind == K.CONSTRUCTOR,
+            owner=self._class_info(cls_cursor) if cls_cursor is not None else None,
             source=self.srcs.text(cur),
             line_count=end - start + 1,
         )

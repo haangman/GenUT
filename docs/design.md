@@ -383,7 +383,7 @@ LLM이 "추측"할 여지를 최대한 없애는 것이 목표입니다. 테스�
 | static 여부 | `static int rb_alloc_slot(...)` | 대상 함수나 호출 심볼이 static이면 스텁 도구의 static 접근 기능 사용 대상으로 표시 |
 | 전처리 조건 | `#ifdef CONFIG_RB_DEBUG` 안에 있음 | 빌드 설정 경고 |
 | 길이·복잡도 | 줄 수, 분기 수 | 케이스 수 추천, 예산 조정 |
-| C++ 요소 (gtest만) | `namespace`, 클래스, 멤버 함수, 오버로드, 템플릿 여부 | 자유 함수와 static 멤버 함수를 먼저 지원. 인스턴스 멤버 함수는 생성자 시그니처와 필요한 멤버 상태를 함께 추출(후속 단계) |
+| C++ 요소 (gtest만) | `namespace`, 클래스, 멤버 함수, 생성자, 오버로드, 접근 지정자, const, 템플릿 여부. 멤버 함수면 소속 클래스의 공개 생성자 시그니처, 기본 생성 가능 여부, 추상 여부, 멤버 변수(접근 지정자 포함), 공개 멤버 함수 목록 | 함수는 **키**(`Class_method`, 오버로드는 `_2`부터)로 구분하고 사람에게는 `Class::method`로 보인다. `--func`은 이름·`Class::method`·완전한 이름·키를 받으며 오버로드면 모두 고른다. 보고서에 "호출 방법"(필수)과 "클래스"(줄일 수 있음) 조각을 넣는다 |
 
 ### 6.4 링크 범위 판정 (linkscope)
 
@@ -590,6 +590,7 @@ Fixer가 고를 수 있는 전략은 다섯 가지이고, 올라갈수록 "덜 �
 | 테스트 타깃 | GenUT가 관리하는 `CMakeLists.txt`는 테스트 파일을 glob으로 찾아 파일마다 실행 파일 타깃(`genut_<src>_<func>`)을 만든다. 작업 중에는 이 파일과 테스트 파일을 전용 빌드 디렉터리 안(`genut-src/`)에만 두고, 최상위 `project()` 직후 실행되는 주입 파일(`CMAKE_PROJECT_INCLUDE`)이 최상위 처리가 끝날 때 그것을 include한다. 그래서 GenUT 빌드에는 사용자의 수정이 필요 없고, 프로덕트 트리는 설치 전까지 그대로다(11.2). 설치 때 같은 CMakeLists를 `[gtest] cmake_lists_dir`에, 함수별 테스트 파일을 `[gtest] output_dir`에 쓴다(7.8). 사용자가 루트에서 `add_subdirectory`로 한 번 연결하면 사용자 빌드에서도 같은 테스트가 빌드되며, GenUT 빌드는 그 설치본을 건너뛴다 |
 | 링크 | `[gtest] link_targets`에 적힌 사용자 타깃을 링크한다. 비어 있으면 CMake File API로 대상 소스가 속한 타깃을 찾아 **그 테스트 파일에만** 쓴다(소스 파일마다 속한 라이브러리가 다르므로). 테스트별 링크 타깃은 관리 디렉터리의 `genut_links.cmake`에 남고, 설치는 그 함수의 항목만 갱신한다. `linkable` 판정(6.4)도 같은 정보(링크 타깃과 의존 타깃의 소스)로 한다 |
 | 전용 빌드 디렉터리 | `[gtest] cmake_build_dir`(기본 `build-genut`)를 GenUT가 구성한다. 사용자 빌드 디렉터리는 건드리지 않는다. 구성 시 커버리지 플래그(`--coverage` 또는 llvm 계열), 선택한 새니타이저, `coverage_opt_level`을 `CMAKE_C_FLAGS`/`CMAKE_CXX_FLAGS`에 넣으므로 대상 소스도 계측된 채 빌드된다. compile_commands.json은 이 디렉터리 것을 쓴다 |
+| C++ 멤버 함수 | 인스턴스 멤버 함수면 fixture에 대상 클래스를 기본 생성한 `obj` 멤버를 두고 케이스는 `obj.method(...)`로 부른다. fixture는 케이스마다 새로 만들어지므로 객체 상태가 케이스 사이에 새지 않는다. 다른 생성자가 필요한 케이스는 본문에서 객체를 직접 만든다. static 멤버와 namespace 함수는 완전한 이름으로 부른다. 리뷰 검사(7.9)는 `obj.f()`, `p->f()`, `C::f()`를 대상 호출로 세고, 생성자는 클래스 이름이 나오면 부른 것으로 본다. 기본 선택(`--func` 생략)은 비static 자유 함수와 공개 멤버 함수이고 생성자는 `--func`로 고를 때만 다룬다. private·protected 멤버(스텁 도구 없이), 템플릿, 추상 클래스의 인스턴스 멤버 함수는 `untestable`로 끝내고 사유를 남긴다 |
 | C 소스를 C++ 테스트에서 | 뼈대의 include 블록을 `extern "C" { ... }`로 감싼다. 대상 헤더가 C++에서 컴파일되지 않으면(예: `new`를 식별자로 사용) `header_not_cpp_clean`으로 분류해 사람에게 안내한다 |
 | 스텁과 실제 정의의 충돌 | 링크된 타깃에 이미 정의가 있는 심볼을 스텁하면 중복 정의가 난다. 심볼 교체 방식(`--wrap`, weak 심볼, objcopy 등)은 스텁 도구 md가 정하며, GenUT는 `duplicate_symbol` 분류로 잡아 Stub Planner에 "이 심볼은 스텁 도구의 교체 방식 필요"로 전달한다 |
 | 실행 | `--gtest_output=json`으로 케이스별 결과와 기대값/실제값을 받는다. `--gtest_filter=Suite.Case`로 케이스 격리. 실행은 임시 작업 디렉터리에서 `test_timeout_sec` 안에 하고, 생성된 코드가 호스트를 건드리지 않도록 "작업 디렉터리 밖 파일·네트워크 접근 금지"를 기본 규칙 md에 둔다 |
@@ -1350,7 +1351,7 @@ candidates = 3
 - `tests/fixtures/sample_project/`: CMake + 작은 라이브러리(링 버퍼, 문자열 유틸, 상태 머신). e2e와 평가 코퍼스 겸용
 - `tests/fixtures/logs/`: 실제 형태의 gcc/clang 오류, KTAP 성공/실패, oops(null_deref), KASAN(uaf/oob), BUG_ON, lockdep 로그
 - `tests/fixtures/coverage/`: gcov/llvm-cov가 만든 lcov 트레이스파일 샘플 (부분 커버·전체 커버)
-- `tests/fixtures/cpp_samples/`: 자유 함수, static 멤버, 인스턴스 멤버 함수가 있는 C++ 파일
+- `tests/fixtures/cpp_project/`: CMake + C++ 라이브러리. namespace 자유 함수, 오버로드된 생성자, 인스턴스·const·static·private 멤버, 추상 클래스, 템플릿
 
 ---
 

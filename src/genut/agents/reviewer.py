@@ -62,7 +62,7 @@ class Reviewer(Agent[ReviewerOutput]):
 
     def fragments(self, report: AnalysisReport, fs: FunctionState) -> list[Fragment]:
         cfg, counter = self.env.config, self.env.counter
-        values = self.values(fs.name)
+        values = self.values(report.function.display, function_id=fs.name)
         passed = fs.passed()
         frags = self.base_fragments(values)
         frags += fit(report_fragments(report), cfg.budget.analysis_token_budget, counter)

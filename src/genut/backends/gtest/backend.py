@@ -305,7 +305,7 @@ class GTestBackend:
     def _crash(self, r: Rendered, exe: Path, work: Path, text: str, code: int, running: str | None) -> tuple[CrashBrief, str]:
         ctx = CrashContext(
             test_functions={f"{r.suite}_{c}_Test::TestBody" for c in r.cases} | {f"{r.suite}_{c}_Test" for c in r.cases},
-            target_functions={r.function},
+            target_functions={r.function, r.symbol} - {""},
             our_files=[r.file_name] + ([r.source.name] if r.source else []),
         )
         brief = build_brief(text, ctx, user=True, suspect_case=running or "")

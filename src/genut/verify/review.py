@@ -94,8 +94,13 @@ def _always_true(name: str, args: list[str]) -> bool:
     return False
 
 
-def _calls(text: str, function: str) -> bool:
-    return re.search(rf"(?<![\w.>]){re.escape(function)}\s*\(", text) is not None
+def _calls(text: str, function: str, member: bool = False, constructor: bool = False) -> bool:
+    """대상 호출이 있는가. 자유 함수는 다른 객체의 같은 이름 멤버(x.f()) 호출을 세지 않고, 멤버 함수는 obj.f(), p->f(), C::f()를 센다.
+    생성자는 클래스 이름이 나오면 (C c(1), C(1), new C) 부른 것으로 본다."""
+    if constructor:
+        return re.search(rf"(?<!\w){re.escape(function)}\b", text) is not None
+    before = r"(?<!\w)" if member else r"(?<![\w.>])"
+    return re.search(rf"{before}{re.escape(function)}\s*\(", text) is not None
 
 
 def copied_actual(case: TestCase) -> list[str]:
@@ -120,7 +125,7 @@ def justified(evidence: str, return_lines: list[int]) -> bool:
     return any(re.search(rf"(?<!\d){n}(?!\d)", evidence) for n in return_lines)
 
 
-def review_case(case: TestCase, function: str, helpers: dict[str, str], rules: Rules) -> list[Finding]:
+def review_case(case: TestCase, function: str, helpers: dict[str, str], rules: Rules, member: bool = False, constructor: bool = False) -> list[Finding]:
     found: list[Finding] = []
     asserts = assertions(case.body)
     if not asserts:
@@ -134,7 +139,7 @@ def review_case(case: TestCase, function: str, helpers: dict[str, str], rules: R
         if m:
             found.append(Finding("rejected_pattern", f"규칙 md가 거부하는 패턴입니다: `{rx.pattern}` (본문: {m.group(0)})"))
     code = case.body + "\n" + "\n".join(helpers[h] for h in used_helpers([case.body], helpers))
-    if not _calls(code, function):
+    if not _calls(code, function, member, constructor):
         found.append(Finding("target_not_called", f"대상 함수 {function}을(를) 호출하지 않습니다."))
     copied = copied_actual(case)
     if copied:

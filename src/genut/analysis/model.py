@@ -58,8 +58,25 @@ class Branch(BaseModel):
     end: int
 
 
+class ClassInfo(BaseModel):
+    """멤버 함수가 속한 클래스 (설계 6.3 C++ 요소, 13장 12단계). 테스트가 객체를 만들고 상태를 맞추는 데 쓴다."""
+
+    name: str
+    qualified_name: str
+    kind: str = "class"  # class | struct
+    file: str = ""
+    line: int = 0
+    constructors: list[str] = Field(default_factory=list)  # 공개 생성자
+    default_constructible: bool = True
+    abstract: bool = False
+    template: bool = False
+    fields: list[str] = Field(default_factory=list)  # "int value_ (private)"
+    methods: list[str] = Field(default_factory=list)  # 공개 멤버 함수 (생성자·소멸자 제외)
+
+
 class FunctionInfo(BaseModel):
     name: str
+    key: str = ""  # 실행 안에서 함수를 가리키는 식별자. C 함수는 name, 멤버 함수는 Class_method, 오버로드는 _2, _3
     qualified_name: str = ""
     signature: str
     return_type: str
@@ -75,6 +92,10 @@ class FunctionInfo(BaseModel):
     is_template: bool = False
     class_name: str = ""
     namespace: str = ""
+    access: str = ""  # 멤버 함수의 public | protected | private
+    is_const: bool = False
+    is_constructor: bool = False
+    owner: ClassInfo | None = None
     source: str = ""  # 함수 소스 전문
     calls: list[CallSite] = Field(default_factory=list)
     globals: list[GlobalRef] = Field(default_factory=list)
@@ -88,6 +109,19 @@ class FunctionInfo(BaseModel):
     empty_body: bool = False
     line_count: int = 0
     branch_count: int = 0
+
+    @property
+    def display(self) -> str:
+        """사람과 LLM이 읽는 이름: 멤버 함수는 Class::method."""
+        return f"{self.class_name}::{self.name}" if self.is_method and self.class_name else self.name
+
+    @property
+    def fixture_object(self) -> str:
+        """gtest fixture가 기본 생성해 obj로 주는 클래스 (인스턴스 멤버 함수이고 기본 생성 가능할 때). 아니면 ""."""
+        o = self.owner
+        if not self.is_method or self.is_static_method or self.is_constructor or o is None or not o.default_constructible or o.abstract:
+            return ""
+        return o.qualified_name
 
     def reach(self, line: int) -> Branch | None:
         """그 줄을 감싸는 가장 안쪽 분기."""
